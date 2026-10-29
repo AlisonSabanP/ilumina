@@ -371,6 +371,43 @@ Para una presentación sin gastar créditos ni depender de la red:
 11. **`No file or variants found for asset: .env`** — falta el fichero `.env`.
     Se versiona precisamente para que no pase; si lo has borrado, recupéralo
     con `git checkout -- .env`.
+12. **`Could not close incremental caches in ... caches-jvm` en Windows** —
+    el pub-cache está en una unidad distinta a la del proyecto (`D:\` y `C:\`).
+    Kotlin guarda las rutas de sus cachés relativas a la raíz del proyecto, y
+    entre discos distintos no existe ruta relativa. Ya está mitigado con
+    `kotlin.incremental=false` en `android/gradle.properties`; ver la sección
+    "Windows: el pub-cache en otra unidad" más abajo.
+
+## Windows: el pub-cache en otra unidad
+
+Si al compilar en Windows aparece este error, es que el pub-cache y el proyecto
+están en discos distintos:
+
+```
+java.lang.IllegalArgumentException: this and base files have different roots:
+D:\.pub-cache\hosted\pub.dev\google_maps_flutter_android-2.21.0\...\Messages.kt
+and C:\Users\...\ilumina\android
+```
+
+El proyecto ya lo mitiga con `kotlin.incremental=false`, así que compila tal
+cual. Si además quieres recuperar la compilación incremental (builds más
+rápidos), mueve el pub-cache a la misma unidad que el proyecto:
+
+```powershell
+# PowerShell: mover el pub-cache a la unidad C
+$env:PUB_CACHE = "C:\pub-cache"
+setx PUB_CACHE "C:\pub-cache"          # para que sea permanente
+flutter clean
+flutter pub get
+```
+
+Para dejarlo fijo en el proyecto sin depender de variables de entorno, añade a
+`android/gradle.properties` la ruta explícita, o declara `PUB_CACHE` en el
+entorno antes de abrir el IDE. Tras moverlo hay que volver a ejecutar
+`flutter pub get` para que las dependencias se descarguen en la nueva ubicación.
+
+Si prefieres conservar el pub-cache donde está, deja `kotlin.incremental=false`:
+el APK es idéntico, solo cambia el tiempo de compilación.
 
 ## Dependencias que debo instalar
 

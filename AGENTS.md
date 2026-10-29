@@ -82,6 +82,22 @@ la normalización deja la cadena vacía, la vista previa **no** debe llamar a
 etiqueta "no funcionaba"). `braille_screen.dart` comprueba
 `_hasPrintableLabel` antes de dibujar.
 
+## La cámara del visor no mira de frente
+
+`power3d` abre la cámara con `alpha = -1.57` (unos -90°), es decir **de frente**
+a la pieza. Para una pieza alta y estrecha es el peor ángulo: se ve de canto y
+parece un círculo. `visor_modelo_screen.dart` fija una vista de tres cuartos con
+`setCameraPosition(alpha: -0.75, beta: 1.15, radius: 2.4)`.
+
+Dos detalles que se rompen si se tocan sin cuidado:
+
+1. El visor reencuadra la escena al añadir la malla, así que la cámara hay que
+   recolocarla también en `onModelLoaded`. Fijarla solo al crear el controlador
+   no basta: la pieza vuelve a verse de frente.
+2. El botón "Centrar" **no** llama a `resetView()` del paquete. Ese método
+   recrea la cámara por defecto, o sea, devuelve justo la vista mala. Llama a
+   `_applyInitialCamera()`.
+
 ## Las piezas se construyen Z-arriba y el GLB sale Y-arriba
 
 `MeshBuilder` construye con el eje **Z** como altura (`addTubeZ`, `addBox` con

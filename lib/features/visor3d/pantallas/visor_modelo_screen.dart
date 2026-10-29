@@ -18,10 +18,13 @@ import '../servicios/model_download_service.dart';
 /// dispositivo y `fromNetwork` para los modelos de Meshy. El
 /// [Power3DController] expone el control fino:
 ///
-///  * `updateRotation`  -> activar/desactivar la rotación automática.
-///  * `resetView`       -> centrar la cámara.
-///  * `setLockPosition` -> bloquear el paneo (evita "perder" la pieza).
-///  * `updateZoom`      -> fijar límites de zoom razonables.
+///  * `setCameraPosition` -> vista inicial de tres cuartos (ver [_cameraAlpha]).
+///  * `updateRotation`    -> activar/desactivar la rotación automática.
+///  * `setLockPosition`   -> bloquear el paneo (evita "perder" la pieza).
+///  * `updateZoom`        -> fijar límites de zoom razonables.
+///
+/// No se usa `resetView` del paquete para el botón "Centrar": recrea la cámara
+/// por defecto, que mira la pieza de frente y la aplana. Ver [_resetView].
 ///
 /// Se aplican límites de zoom desde el primer momento para que un usuario con
 /// dificultades motrices no pueda perder el modelo fuera de la pantalla.
@@ -41,6 +44,23 @@ class VisorModeloScreen extends StatefulWidget {
 class _VisorModeloScreenState extends State<VisorModeloScreen> {
   final Power3DController _controller = Power3DController();
   final ModelDownloadService _downloader = ModelDownloadService();
+
+  /// Vista de tres cuartos con la que se abre el visor.
+  ///
+  /// La cámara por defecto de `power3d` mira la pieza **de frente**
+  /// (`alpha = -1.57`, unos -90°), que es justo el peor ángulo para una pieza
+  /// alta y estrecha: se ve de canto y parece un círculo. Con `alpha` a -0.75
+  /// la pieza se gira unos 45° y se aprecia el volumen; `beta` a 1.15 la deja
+  /// algo por encima del ecuador, como una foto de producto.
+  static const double _cameraAlpha = -0.75;
+  static const double _cameraBeta = 1.15;
+
+  /// Radio con el que se encuadra la pieza al abrir el visor.
+  ///
+  /// Es algo menor que el 3.0 por defecto porque las piezas de Lumina son
+  /// pequeñas (una etiqueta Braille o un engrosador miden pocos centímetros) y
+  /// con el encuadre por defecto quedaban diminutas en el centro.
+  static const double _cameraRadius = 2.4;
 
   bool _positionLocked = false;
   bool _busy = false;
@@ -82,11 +102,11 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
     super.dispose();
   }
 
-  /// Aplica los límites de navegación nada más crear el visor.
+  /// Aplica los límites de navegación y la vista inicial nada más crear el visor.
   Future<void> _configureController() async {
     // `initialize()` es síncrono: solo marca el estado como listo. El WebView
     // llama a este mismo método en `onLoadStop`, así que aquí únicamente se
-    // fijan los límites de navegación.
+    // fijan los límites de navegación y el ángulo de cámara.
     _controller.initialize();
     await _controller.updateZoom(enabled: true, min: 0.4, max: 4.0);
     await _controller.updateRotation(
@@ -95,7 +115,27 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
       direction: RotationDirection.clockwise,
     );
     await _controller.setLockPosition(_positionLocked);
+    await _applyInitialCamera();
     if (mounted) setState(() {});
+  }
+
+  /// Coloca la cámara en la vista de tres cuartos.
+  ///
+  /// Se aplica también cuando el modelo termina de cargar (`onModelLoaded`),
+  /// porque el visor reencuadra la escena al añadir la malla y dejaría la
+  /// cámara otra vez de frente.
+  Future<void> _applyInitialCamera() async {
+    try {
+      await _controller.setCameraPosition(
+        alpha: _cameraAlpha,
+        beta: _cameraBeta,
+        radius: _cameraRadius,
+      );
+    } catch (error) {
+      // Si el WebView aún no está listo, `_configureController` volverá a
+      // llamar a este método en `onLoadStop`.
+      debugPrint('No se pudo fijar la cámara inicial: $error');
+    }
   }
 
   Future<void> _checkExistingDownload() async {
@@ -126,10 +166,16 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
     _announce(enabled ? 'Rotación automática activada' : 'Rotación detenida');
   }
 
+  /// Devuelve la cámara a la vista de tres cuartos.
+  ///
+  /// No se usa `resetView()` del paquete a propósito: ese método recrea la
+  /// cámara por defecto, que mira la pieza de frente (`alpha = -1.57`), que es
+  /// justo el ángulo que hace que una pieza alta parezca un círculo. Centrar
+  /// debe devolver la pieza a la vista buena, no a la mala.
   Future<void> _resetView() async {
-    await _controller.resetView();
+    await _applyInitialCamera();
     if (!mounted) return;
-    _announce('Cámara centrada');
+    _announce('Vista restablecida');
   }
 
   Future<void> _togglePositionLock() async {
@@ -246,12 +292,17 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
   ///
   /// Se prefiere siempre la fuente local: el visor funciona sin conexión y sin
   /// esperas cuando el archivo ya está en el móvil.
+  ///
+  /// En ambos casos se engancha `onModelLoaded` para recolocar la cámara: el
+  /// visor reencuadra la escena al añadir la malla y, si no se hiciera, la
+  /// pieza volvería a verse de frente (el "círculo").
   Widget _buildViewer() {
     final localPath = _localGlbPath;
     if (localPath != null) {
       return Power3D.fromFile(
         localPath,
         controller: _controller,
+        onModelLoaded: _applyInitialCamera,
         loadingUi: (context, controller) => const LuminaLoadingView(
           message: 'Cargando tu pieza...',
         ),
@@ -267,6 +318,7 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
     return Power3D.fromNetwork(
       _modelUrl,
       controller: _controller,
+      onModelLoaded: _applyInitialCamera,
       loadingUi: (context, controller) => const LuminaLoadingView(
         message: 'Cargando el modelo 3D...',
       ),
@@ -374,7 +426,7 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
                       _ViewerButton(
                         label: 'Centrar',
                         icon: Icons.center_focus_strong,
-                        hint: 'Devuelve la cámara a la posición inicial',
+                        hint: 'Devuelve la cámara a la vista inicial de tres cuartos',
                         onPressed: _resetView,
                       ),
                       _ViewerButton(

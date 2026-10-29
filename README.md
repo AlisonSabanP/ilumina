@@ -225,7 +225,9 @@ Desde el formulario, "Añadir medida" abre el centro de medición con dos vías:
    con su progreso.
 3. Al terminar, **Ver el modelo en 3D** abre el visor: rotar automáticamente,
    detener la rotación, centrar la cámara y bloquear el paneo (para no
-   "perder" la pieza). El zoom está limitado entre 0,4× y 4×.
+   "perder" la pieza). El zoom está limitado entre 0,4× y 4×. El visor abre en
+   vista de tres cuartos, no de frente: de frente las piezas altas y estrechas
+   se ven de canto y parecen un círculo. "Centrar" devuelve a esa misma vista.
 4. **Descargar STL** guarda el archivo listo para laminar; **Compartir STL** lo
    envía por cualquier app instalada (correo, mensajería, Drive). El STL se abre
    directamente en Cura, PrusaSlicer o Bambu Studio. El visor usa una copia

@@ -44,16 +44,11 @@ class ProGripProvider extends ChangeNotifier {
   /// `true` cuando la combinación elegida tiene sentido.
   ///
   /// Dos avisos útiles para el usuario:
-  ///  * Un adaptador pesado (taladro) pide un acople de antebrazo.
   ///  * Un garfio de dos dedos no es suficiente para una sierra.
+  ///  * La pinza de presión rinde mejor con correa o soporte de palma.
   List<String> get compatibilityWarnings {
     final warnings = <String>[];
 
-    if (_adapter == ToolAdapter.drill && _base != GripBase.forearm) {
-      warnings.add(
-        'Un taladro pesa: considera el acople de antebrazo para repartir el peso.',
-      );
-    }
     if (_adapter == ToolAdapter.saw &&
         (_hook == GripHook.twoFingers || _hook == GripHook.thumbRest)) {
       warnings.add(

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -78,6 +79,39 @@ class ModelDownloadService {
       return file.path;
     } on MeshyException {
       rethrow;
+    } on FileSystemException catch (error) {
+      throw MeshyException(
+        message:
+            'No se pudo guardar el modelo en el dispositivo: ${error.message}',
+        kind: MeshyErrorKind.server,
+        isRetryable: true,
+      );
+    }
+  }
+
+  /// Copia a disco un `.glb` empaquetado en la app y devuelve su ruta.
+  ///
+  /// Se usa en el modo de demostración: el modelo vive en los assets, pero para
+  /// compartirlo o abrirlo en un laminador hace falta un fichero real en disco.
+  Future<String> exportAsset({
+    required String assetPath,
+    required String id,
+    String? title,
+  }) async {
+    try {
+      final dir = await modelsDirectory();
+      final file = File('${dir.path}/${fileNameFor(id, title: title)}');
+      if (await file.exists() && await file.length() > 0) {
+        return file.path;
+      }
+      final data = await rootBundle.load(assetPath);
+      await file.writeAsBytes(data.buffer.asUint8List(), flush: true);
+      return file.path;
+    } on FlutterError catch (error) {
+      throw MeshyException(
+        message: 'No se pudo preparar la pieza de demostración: ${error.message}',
+        kind: MeshyErrorKind.server,
+      );
     } on FileSystemException catch (error) {
       throw MeshyException(
         message:

@@ -120,7 +120,7 @@ class HomeScreen extends StatelessWidget {
           _ModuleCard(
             title: 'OrthoSnap',
             description:
-                'Órtesis clínicas con estructura Voronoi. Acceso restringido a '
+                'Órtesis clínicas personalizadas. Acceso restringido a '
                 'profesionales sanitarios.',
             icon: Icons.medical_services_outlined,
             accent: theme.colorScheme.secondary,
@@ -143,9 +143,11 @@ class HomeScreen extends StatelessWidget {
                     leading: const Icon(Icons.threed_rotation),
                     title: Text(model.title),
                     subtitle: Text(
-                      model.isDownloaded
-                          ? 'Guardado en el dispositivo'
-                          : 'En la nube de Meshy',
+                      model.isDemo
+                          ? 'Pieza de ejemplo'
+                          : model.isDownloaded
+                              ? 'Guardado en el dispositivo'
+                              : 'En la nube',
                     ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => Navigator.of(context).push(
@@ -229,9 +231,11 @@ class HistoryScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          model.isDownloaded
-                              ? 'Guardado en el dispositivo'
-                              : 'Solo en la nube (Meshy borra los archivos a los 3 días)',
+                          model.isDemo
+                              ? 'Pieza de ejemplo'
+                              : model.isDownloaded
+                                  ? 'Guardado en el dispositivo'
+                                  : 'Solo en la nube (se borra a los 3 días)',
                         ),
                         if (model.createdAt != null)
                           Text(

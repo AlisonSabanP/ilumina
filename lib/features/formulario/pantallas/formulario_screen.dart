@@ -268,7 +268,7 @@ class _ReviewStep extends StatelessWidget {
                 isPrimary: false,
                 onPressed: () =>
                     Navigator.of(context).push(MedicionHubScreen.route()),
-                hint: 'Abre la medición por AR y por landmarks de la mano',
+                hint: 'Abre la medición con cámara o con regla',
               ),
             ],
           ),
@@ -305,19 +305,19 @@ class _ReviewStep extends StatelessWidget {
         // --- Braille ---
         LuminaSectionCard(
           title: 'Etiqueta en Braille',
-          subtitle: form.brailleText.isEmpty
-              ? 'Opcional: genera una etiqueta con relieve para identificar la pieza.'
-              : 'Texto guardado: "${form.brailleText}"',
+          subtitle: form.hasCustomBrailleLabel
+              ? 'Tu etiqueta: "${form.brailleLabel}"'
+              : 'Se grabará "${form.brailleLabel}" en la pieza. Puedes cambiarlo.',
           leadingIcon: Icons.dialpad,
           child: AccessibleButton(
-            label: form.brailleText.isEmpty
-                ? 'Generar etiqueta en Braille'
-                : 'Editar etiqueta en Braille',
+            label: form.hasCustomBrailleLabel
+                ? 'Editar etiqueta en Braille'
+                : 'Personalizar etiqueta en Braille',
             icon: Icons.dialpad,
             pictogram: Icons.dialpad,
             isPrimary: false,
             onPressed: () => Navigator.of(context).push(BrailleScreen.route()),
-            hint: 'Convierte texto a Braille y ajusta el tamaño',
+            hint: 'Cambia el texto que se graba en relieve en la pieza',
           ),
         ),
         const SizedBox(height: AppSpacing.xl),
@@ -327,7 +327,7 @@ class _ReviewStep extends StatelessWidget {
           label: 'Generar modelo 3D',
           icon: Icons.auto_awesome,
           pictogram: Icons.auto_awesome,
-          hint: 'Envía el diseño a Meshy AI y muestra el progreso',
+          hint: 'Genera el modelo y muestra el progreso',
           onPressed: () =>
               Navigator.of(context).push(GeneracionScreen.route()),
         ),

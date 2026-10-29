@@ -58,3 +58,7 @@ app.*.map.json
 
 # Modelos descargados y artefactos locales
 *.glb
+
+# Excepción: la pieza de ejemplo del modo de demostración SÍ se versiona.
+# Sin ella, el modo de demostración no tendría nada que mostrar.
+!assets/models/demo_pieza.glb

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/app_spacing.dart';
-import '../../../core/env.dart';
 import '../../../shared/widgets/lumina_widgets.dart';
 import '../../accesibilidad/providers/accessibility_provider.dart';
 import '../../accesibilidad/widgets/accessibility_fab.dart';
@@ -16,13 +15,9 @@ import '../providers/generation_provider.dart';
 /// (`PENDING` -> `IN_PROGRESS` -> `SUCCEEDED`) con su porcentaje de progreso, y
 /// ofrece reintentar ante cualquier error.
 ///
-/// Notas de comportamiento importantes:
-///  * El botón de reintento **crea una tarea nueva**. Es correcto solo cuando la
-///    anterior terminó en `FAILED`; si lo que falló fue la red, el mensaje de
-///    error avisa de que la tarea puede seguir viva.
-///  * Con la clave de prueba (`Env.testModeApiKey`) Meshy no genera el modelo
-///    del prompt: se avisa de forma visible en lugar de dejar creer al usuario
-///    que su pieza se ha generado.
+/// Sin una clave propia, la pantalla trabaja en modo de demostración: carga una
+/// pieza de ejemplo incluida en la app para que se pueda probar el visor, la
+/// descarga y el uso compartido sin gastar créditos ni necesitar conexión.
 class GeneracionScreen extends StatefulWidget {
   const GeneracionScreen({super.key});
 
@@ -83,17 +78,17 @@ class _GeneracionScreenState extends State<GeneracionScreen> {
           const LuminaPageHeader(
             title: 'Generando tu modelo',
             subtitle:
-                'Meshy AI construye la geometría a partir del prompt. Suele tardar entre uno y cinco minutos.',
+                'La pieza se construye a partir de tus respuestas y tus medidas. '
+                'Suele tardar unos minutos.',
             icon: Icons.auto_awesome,
           ),
 
-          if (generation.isTestMode)
+          if (generation.isDemoMode)
             const LuminaInfoBanner(
               message:
-                  'Modo de prueba: estás usando la clave de demostración de Meshy. '
-                  'No se genera el modelo de tu prompt y no se consumen créditos. '
-                  'Añade tu propia clave con --dart-define=MESHY_API_KEY=... para '
-                  'generar piezas reales.',
+                  'Modo de demostración: se muestra una pieza de ejemplo para que '
+                  'pruebes el visor, la descarga y el uso compartido. Para generar '
+                  'piezas reales hace falta una clave de Meshy.',
               icon: Icons.science_outlined,
               tone: LuminaBannerTone.warning,
             ),
@@ -105,10 +100,9 @@ class _GeneracionScreenState extends State<GeneracionScreen> {
           // --- Prompt enviado ---
           if (generation.prompt != null)
             LuminaSectionCard(
-              title: 'Prompt enviado a Meshy',
+              title: 'Descripción de tu pieza',
               subtitle: generation.prompt!.wasTrimmed
-                  ? 'Se recortó de ${generation.prompt!.originalLength} a '
-                      '${generation.prompt!.length} caracteres (el límite de Meshy es 800).'
+                  ? 'Se ajustó a ${generation.prompt!.length} caracteres.'
                   : '${generation.prompt!.length} caracteres.',
               leadingIcon: Icons.description_outlined,
               child: SelectableText(
@@ -118,10 +112,10 @@ class _GeneracionScreenState extends State<GeneracionScreen> {
             ),
 
           // --- Tarea ---
-          if (generation.task != null) ...[
+          if (generation.task != null && !generation.isDemoMode) ...[
             const SizedBox(height: AppSpacing.lg),
             LuminaSectionCard(
-              title: 'Tarea en Meshy',
+              title: 'Progreso de la generación',
               leadingIcon: Icons.cloud_sync,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -175,7 +169,7 @@ class _GeneracionScreenState extends State<GeneracionScreen> {
                       icon: Icons.refresh,
                       pictogram: Icons.refresh,
                       onPressed: generation.retry,
-                      hint: 'Vuelve a enviar el diseño a Meshy',
+                      hint: 'Vuelve a generar el modelo',
                     )
                   else
                     AccessibleButton(
@@ -195,8 +189,9 @@ class _GeneracionScreenState extends State<GeneracionScreen> {
             const SizedBox(height: AppSpacing.lg),
             LuminaSectionCard(
               title: 'Modelo listo',
-              subtitle:
-                  'Meshy conserva los archivos tres días. Descárgalo o compártelo para no perderlo.',
+              subtitle: generation.isDemoMode
+                  ? 'Pieza de ejemplo lista para ver, descargar y compartir.'
+                  : 'Meshy conserva los archivos tres días. Descárgalo o compártelo para no perderlo.',
               leadingIcon: Icons.check_circle,
               child: Column(
                 children: [
@@ -227,22 +222,22 @@ class _GeneracionScreenState extends State<GeneracionScreen> {
                 _step(
                   context,
                   '1',
-                  'Lumina compone un prompt con tu formulario y tus medidas reales.',
+                  'Lumina describe tu pieza con tus respuestas y tus medidas.',
                 ),
                 _step(
                   context,
                   '2',
-                  'Se crea una tarea en Meshy y se consulta su estado cada pocos segundos.',
+                  'La pieza se construye y se muestra el avance.',
                 ),
                 _step(
                   context,
                   '3',
-                  'Cuando el estado es SUCCEEDED, Lumina descarga el archivo .glb.',
+                  'Cuando está lista, puedes verla en 3D.',
                 ),
                 _step(
                   context,
                   '4',
-                  'Puedes verlo, descargarlo y compartirlo para imprimirlo.',
+                  'Descárgala o compártela para imprimirla.',
                 ),
               ],
             ),
@@ -319,11 +314,11 @@ class _StatusCard extends StatelessWidget {
 
     final statusText = switch (generation.phase) {
       GenerationPhase.idle => 'Sin empezar',
-      GenerationPhase.preparing => 'Preparando el prompt...',
-      GenerationPhase.creating => 'Enviando el diseño a Meshy...',
+      GenerationPhase.preparing => 'Preparando tu diseño...',
+      GenerationPhase.creating => 'Enviando el diseño...',
       GenerationPhase.polling => generation.task == null
           ? 'Consultando el estado...'
-          : 'Meshy: ${generation.task!.status.label} '
+          : '${generation.task!.status.label} '
               '(${generation.task!.progress} %)',
       GenerationPhase.succeeded => 'Modelo generado correctamente',
       GenerationPhase.failed => 'La generación falló',
@@ -383,17 +378,16 @@ class _StatusCard extends StatelessWidget {
               if (generation.phase == GenerationPhase.polling) ...[
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  'Meshy puede tardar varios minutos. No cierres la pantalla: '
-                  'si la cierras, la tarea sigue en el servidor y podrás '
-                  'consultarla con su identificador.',
+                  'La generación puede tardar varios minutos. Si cierras la '
+                  'pantalla, el modelo se seguirá creando.',
                   style: theme.textTheme.bodySmall,
                 ),
               ],
-              if (generation.isTestMode) ...[
+              if (generation.isDemoMode) ...[
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  'Clave de prueba: ${Env.testModeApiKey.substring(0, 12)}… '
-                  '(no válida para generar piezas reales)',
+                  'Pieza de demostración: no se ha llamado al servicio de '
+                  'generación.',
                   style: theme.textTheme.bodySmall,
                 ),
               ],

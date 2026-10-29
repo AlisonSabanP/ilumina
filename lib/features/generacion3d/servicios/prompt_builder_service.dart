@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../shared/servicios/braille_service.dart';
 import '../../formulario/modelos/formulario_modelos.dart';
 import '../../formulario/modelos/formulario_provider.dart';
 import '../../medicion/modelos/measurement_models.dart';
@@ -40,6 +41,7 @@ class PromptBuilderService {
       _profileContext(form.profile),
       ...form.promptFragments,
       _measurementsBlock(form.measurements),
+      _brailleBlock(form.brailleLabel),
       _materialBlock(form.material),
       _printingBlock(),
       _accessibilityBlock(form.profile),
@@ -65,6 +67,7 @@ class PromptBuilderService {
       _printingBlock(),
       'All edges must be rounded, the surface smooth on the palm side and textured where the fingers rest',
       'Include a safety strap hole so the tool cannot be dropped',
+      _brailleBlock('progrip ${config.adapter.label}'),
     ];
 
     return _assemble(parts, seed: 'ProGrip assistive tool grip');
@@ -111,6 +114,20 @@ class PromptBuilderService {
     }
     final phrases = measurements.map((m) => m.promptPhrase).join('. ');
     return 'Real measurements of the user: $phrases';
+  }
+
+  /// Bloque que pide grabar la etiqueta Braille en la propia pieza.
+  ///
+  /// Meshy trabaja con texto en inglés y no puede generar puntos Braille a
+  /// partir de los caracteres Unicode, así que la instrucción es geométrica:
+  /// relieve de 1,5 mm de alto y 2,5 mm entre puntos, que son las medidas que
+  /// hacen legible una etiqueta impresa con el dedo.
+  String _brailleBlock(String? label) {
+    final text = label == null ? '' : BrailleService.prepareLabel(label);
+    if (text.isEmpty) return '';
+    return 'Emboss a Braille label directly on the surface of the part, '
+        'reading "$text", with raised dots 1.5 mm high and 2.5 mm apart, '
+        'in a recessed flat area so the dots are not worn down in use';
   }
 
   String _materialBlock(String material) {

@@ -29,9 +29,9 @@ import '../modelos/meshy_models.dart';
 ///    documentación ("espera al menos 60 minutos antes de darte por vencido").
 ///    Si se agota, la tarea sigue viva en el servidor: se devuelve el último
 ///    estado conocido con `timeout`, no un fallo.
-///  * **Clave de prueba**: si no hay clave configurada, se usa
-///    `Env.testModeApiKey`. En ese modo Meshy no genera el modelo del prompt
-///    (devuelve un resultado de demostración), y la UI lo advierte.
+///  * **Sin clave real**: cuando no hay clave configurada, la app ni siquiera
+///    llega a este servicio: `GenerationProvider` carga una pieza de ejemplo
+///    local. Meshy no ofrece modo de prueba gratuito y responde 401.
 class MeshyService {
   MeshyService({http.Client? client}) : _client = client ?? http.Client();
 
@@ -337,8 +337,9 @@ class MeshyService {
         );
       case 401:
         throw MeshyException(
-          message: 'La clave de API de Meshy no es válida. '
-              'Revisa MESHY_API_KEY en tu .env o en --dart-define.',
+          message: 'Meshy rechazó la clave de API. Comprueba que has copiado '
+              'bien tu clave en --dart-define=MESHY_API_KEY=... y que sigue '
+              'activa en tu cuenta de Meshy.',
           kind: MeshyErrorKind.unauthorized,
           statusCode: 401,
         );

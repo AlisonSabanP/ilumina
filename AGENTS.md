@@ -9,7 +9,7 @@ saber para trabajar en el código sin romperlo.
 ```bash
 flutter pub get
 flutter analyze          # debe quedar en "No issues found!"
-flutter test             # 13 pruebas, todas deben pasar
+flutter test             # 20 pruebas, todas deben pasar
 flutter build apk --debug
 flutter build apk --release   # ~5 min; R8 tarda
 ```
@@ -89,9 +89,21 @@ El prompt se compone por capas en `prompt_builder_service.dart` y se recorta a
 `pubspec.yaml` declara `.env` como asset porque `flutter_dotenv` lo lee del
 bundle en el dispositivo. Si el fichero no existe, `flutter build` falla con
 `No file or variants found for asset: .env`. Por eso `.env` está **fuera** de
-`.gitignore` y solo contiene la clave pública de prueba de Meshy. La clave real
-va siempre por `--dart-define=MESHY_API_KEY=...`, que tiene prioridad (ver
-`lib/core/env.dart`). No metas una clave real en el `.env` del repositorio.
+`.gitignore`. La clave real va siempre por `--dart-define=MESHY_API_KEY=...`,
+que tiene prioridad (ver `lib/core/env.dart`). No metas una clave real en el
+`.env` del repositorio.
+
+## Meshy no tiene modo de prueba
+
+El valor `msy_dummy_api_key_for_test_mode_12345678` del `.env` **no es una
+clave válida**: Meshy responde `401 Invalid API key` a cualquier clave que no
+sea de una cuenta real. Se usa solo como centinela para detectar "no hay clave
+configurada". En ese caso `GenerationProvider._runDemo` no llama a la API y
+carga `assets/models/demo_pieza.glb` con `Power3D.fromAsset`. No inventes un
+"modo de prueba" de Meshy que devuelva modelos: no existe.
+
+`assets/models/*.glb` está excluido por `.gitignore`, salvo `demo_pieza.glb`,
+que se versiona porque el modo de demostración lo necesita.
 
 ## Marcadores `[VERIFICAR]`
 

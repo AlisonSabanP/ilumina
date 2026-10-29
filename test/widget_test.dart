@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lumina/core/app_theme.dart';
+import 'package:lumina/shared/servicios/braille_service.dart';
 import 'package:lumina/features/accesibilidad/providers/accessibility_provider.dart';
 import 'package:lumina/features/formulario/modelos/formulario_modelos.dart';
 import 'package:lumina/features/formulario/modelos/formulario_provider.dart';
+import 'package:lumina/features/generacion3d/providers/generation_provider.dart';
+import 'package:lumina/features/generacion3d/servicios/prompt_builder_service.dart';
 import 'package:lumina/features/medicion/modelos/measurement_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -132,15 +135,26 @@ void main() {
   });
 
   group('HandMetrics', () {
-    test('sin calibración devuelve unidades relativas', () {
+    test('sin calibrar estima centímetros con el ancho de palma medio', () {
       final metrics = HandMetrics.fromLandmarks(
         _openHand(),
         frameWidth: 720,
         frameHeight: 1280,
       );
-      expect(metrics.isCalibrated, isFalse);
-      expect(metrics.unitLabel, 'u.r.');
+      // Los valores salen en centímetros, pero marcados como estimación, para
+      // que nunca aparezcan medidas de un orden de magnitud absurdo.
+      expect(metrics.isCalibrated, isTrue);
+      expect(metrics.isEstimated, isTrue);
+      expect(metrics.unitLabel, 'cm');
       expect(metrics.confidence, 1);
+      // Con el ancho de palma medio, la palma mide exactamente ese valor.
+      expect(
+        metrics.palmWidth,
+        closeTo(HandMetrics.defaultReferencePalmWidthCm, 0.001),
+      );
+      // Y la mano completa, un valor humano plausible.
+      expect(metrics.handSpan, greaterThan(10));
+      expect(metrics.handSpan, lessThan(30));
     });
 
     test('con calibración devuelve centímetros coherentes', () {
@@ -151,10 +165,68 @@ void main() {
         referencePalmWidthCm: 8.5,
       );
       expect(metrics.isCalibrated, isTrue);
+      expect(metrics.isEstimated, isFalse);
       expect(metrics.unitLabel, 'cm');
       // La palma se ha calibrado a 8,5 cm exactos.
       expect(metrics.palmWidth, closeTo(8.5, 0.001));
       expect(metrics.handSpan, greaterThan(metrics.palmWidth));
+    });
+
+    test('con calibración la medida no depende de la resolución del fotograma',
+        () {
+      // Propiedad clave del arreglo: al calibrar con el ancho de palma, la
+      // medida en centímetros es invariante a la resolución del fotograma. Si
+      // se pasan las dimensiones equivocadas (el `previewSize` en lugar del
+      // tamaño real de la imagen), la relación de aspecto cambia y el valor
+      // sale desviado; con el fotograma correcto, no.
+      final small = HandMetrics.fromLandmarks(
+        _openHand(),
+        frameWidth: 640,
+        frameHeight: 480,
+        referencePalmWidthCm: 8.5,
+      );
+      final large = HandMetrics.fromLandmarks(
+        _openHand(),
+        frameWidth: 1280,
+        frameHeight: 960,
+        referencePalmWidthCm: 8.5,
+      );
+      expect(small.palmWidth, closeTo(8.5, 0.001));
+      expect(large.palmWidth, closeTo(8.5, 0.001));
+      // Misma proporción de fotograma => mismo resultado en centímetros.
+      expect(small.handSpan, closeTo(large.handSpan, 0.001));
+    });
+
+    test('una proporción de fotograma equivocada desvía la medida', () {
+      // Esto es lo que ocurría al usar `previewSize`: la proporción no era la
+      // del fotograma analizado y las distancias salían mal.
+      final correct = HandMetrics.fromLandmarks(
+        _openHand(),
+        frameWidth: 640,
+        frameHeight: 480,
+        referencePalmWidthCm: 8.5,
+      );
+      final distorted = HandMetrics.fromLandmarks(
+        _openHand(),
+        frameWidth: 720,
+        frameHeight: 1280,
+        referencePalmWidthCm: 8.5,
+      );
+      expect(
+        (distorted.handSpan - correct.handSpan).abs(),
+        greaterThan(1),
+      );
+    });
+
+    test('rechaza un tamaño de fotograma no positivo', () {
+      expect(
+        () => HandMetrics.fromLandmarks(
+          _openHand(),
+          frameWidth: 0,
+          frameHeight: 1280,
+        ),
+        throwsArgumentError,
+      );
     });
 
     test('exige 21 landmarks', () {
@@ -165,6 +237,82 @@ void main() {
           frameHeight: 1280,
         ),
         throwsArgumentError,
+      );
+    });
+  });
+
+  group('GenerationProvider', () {
+    // Estas pruebas ejercitan el modo de demostración, que es el que se usa
+    // cuando no hay clave de Meshy. No tocan la red: comprueban que el flujo
+    // completo (fases, modelo, historial) funciona y que el prompt que se
+    // enviaría incluye la etiqueta Braille.
+    test('sin clave propia entra en modo de demostración', () {
+      final provider = GenerationProvider();
+      expect(provider.isDemoMode, isTrue);
+      expect(provider.hasModel, isFalse);
+    });
+
+    test('la generación de demostración termina con un modelo local', () async {
+      final provider = GenerationProvider();
+      final form = FormularioProvider()
+        ..selectProfile(NeedProfile.motriz)
+        ..answer('m_tool')
+        ..answer('m_tool_screwdriver');
+      expect(form.recommendation, isNotNull);
+
+      await provider.generateFromFormulario(form);
+
+      expect(provider.phase, GenerationPhase.succeeded);
+      expect(provider.hasModel, isTrue);
+      expect(provider.model!.isLocalAsset, isTrue);
+      expect(provider.model!.isDemo, isTrue);
+      // El modelo de demostración apunta al asset declarado en pubspec.
+      expect(provider.model!.assetPath, GenerationProvider.demoAssetPath);
+      expect(provider.history, hasLength(1));
+      provider.dispose();
+    });
+
+    test('el prompt incluye la etiqueta Braille de la pieza', () {
+      final form = FormularioProvider()
+        ..selectProfile(NeedProfile.motriz)
+        ..answer('m_tool')
+        ..answer('m_tool_screwdriver');
+      final built = const PromptBuilderService().fromFormulario(form);
+      expect(built.prompt.toLowerCase(), contains('braille'));
+      expect(built.prompt, contains(form.brailleLabel));
+    });
+  });
+
+  group('BrailleService', () {
+    test('quita tildes y mayúsculas que el conversor perdería', () {
+      // `BrailleConverter` convierte a espacio todo lo que no esté en su tabla:
+      // sin normalizar, "Muñeca" saldría como "mu eca".
+      expect(BrailleService.normalize('Muñeca izquierda'), 'muneca izquierda');
+      expect(BrailleService.normalize('Diámetro'), 'diametro');
+      expect(BrailleService.normalize('Férula nº 3'), 'ferula n 3');
+    });
+
+    test('genera Braille Unicode sin huecos', () {
+      final braille = BrailleService.toBraille('Muñeca');
+      expect(braille, isNotEmpty);
+      // Ningún carácter debe quedar como espacio en medio de la palabra.
+      expect(braille.trim(), braille);
+      expect(braille.contains(' '), isFalse);
+    });
+
+    test('recorta etiquetas largas por palabra completa', () {
+      final label = BrailleService.prepareLabel(
+        'Adaptador ergonomico para destornillador de precision',
+      );
+      expect(label.length, lessThanOrEqualTo(BrailleService.maxLabelLength));
+      // No debe cortar una palabra por la mitad.
+      expect(label.endsWith('de'), isFalse);
+    });
+
+    test('la etiqueta automática sale del título de la recomendación', () {
+      expect(
+        BrailleService.labelFromTitle('Adaptador ProGrip para sierra'),
+        'adaptador progrip para sierra',
       );
     });
   });

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../shared/servicios/braille_service.dart';
 import '../../medicion/modelos/measurement_models.dart';
 import 'formulario_modelos.dart';
 
@@ -38,6 +39,24 @@ class FormularioProvider extends ChangeNotifier {
   List<Measurement> get measurements => List.unmodifiable(_measurements);
 
   String get brailleText => _brailleText;
+
+  /// Etiqueta Braille efectiva que se grabará en la pieza.
+  ///
+  /// Si el usuario no ha escrito nada, se genera sola a partir de la
+  /// recomendación ("Adaptador ProGrip para sierra" -> "adaptador progrip para
+  /// sierra"). Así toda pieza sale etiquetada sin trabajo extra, que es lo que
+  /// necesita alguien que no ve el objeto.
+  String get brailleLabel {
+    if (_brailleText.trim().isNotEmpty) {
+      return BrailleService.prepareLabel(_brailleText);
+    }
+    final title = _recommendation?.title;
+    if (title == null || title.trim().isEmpty) return '';
+    return BrailleService.labelFromTitle(title);
+  }
+
+  /// `true` si la etiqueta la ha escrito el usuario.
+  bool get hasCustomBrailleLabel => _brailleText.trim().isNotEmpty;
 
   bool get finished => _finished;
 

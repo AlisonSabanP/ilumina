@@ -237,24 +237,6 @@ abstract final class FormTree {
           ],
         ),
         FormOption(
-          id: 'm_tool_drill',
-          label: 'Taladro',
-          pictogram: Icons.build_circle,
-          recommendation: ToolRecommendation(
-            id: 'progrip_taladro',
-            title: 'Adaptador ProGrip para taladro',
-            description:
-                'Soporte de muñeca que reparte el peso del taladro y reduce la vibración.',
-            icon: Icons.build_circle,
-            promptSeed:
-                'Custom 3D printable support bracket for a power drill for a person with limited grip strength',
-          ),
-          promptFragments: [
-            'The bracket must transfer the drill weight to the forearm and dampen vibration',
-            'Add a trigger guard extension that can be pressed with the whole hand',
-          ],
-        ),
-        FormOption(
           id: 'm_tool_knife',
           label: 'Cuchillo',
           pictogram: Icons.cut,

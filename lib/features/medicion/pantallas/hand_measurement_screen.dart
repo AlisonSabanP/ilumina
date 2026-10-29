@@ -3,14 +3,13 @@ import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../../../core/app_spacing.dart';
 import '../../../core/app_theme.dart';
 import '../../../shared/widgets/lumina_widgets.dart';
 import '../../accesibilidad/providers/accessibility_provider.dart';
-import '../../formulario/modelos/formulario_provider.dart';
 import '../modelos/measurement_models.dart';
+import '../modelos/measurement_target.dart';
 import '../servicios/hand_detector.dart';
 import 'manual_measurement_screen.dart';
 
@@ -35,10 +34,19 @@ import 'manual_measurement_screen.dart';
 /// `processFrame` se alimenta con `startImageStream` en formato YUV420, que es
 /// lo que el plugin espera (tres planos: Y, U, V).
 class HandMeasurementScreen extends StatefulWidget {
-  const HandMeasurementScreen({super.key});
+  const HandMeasurementScreen({
+    super.key,
+    this.target = MeasurementTarget.formulario,
+  });
 
-  static Route<void> route() => MaterialPageRoute<void>(
-        builder: (_) => const HandMeasurementScreen(),
+  /// Dónde se guardan las medidas.
+  final MeasurementTarget target;
+
+  static Route<void> route({
+    MeasurementTarget target = MeasurementTarget.formulario,
+  }) =>
+      MaterialPageRoute<void>(
+        builder: (_) => HandMeasurementScreen(target: target),
       );
 
   @override
@@ -53,6 +61,12 @@ class _HandMeasurementScreenState extends State<HandMeasurementScreen> {
 
   List<HandPoint> _landmarks = <HandPoint>[];
   HandMetrics? _metrics;
+
+  /// Tamaño del último fotograma enviado al detector, ya corregido por la
+  /// rotación del sensor. Es la referencia que hay que usar para pasar de
+  /// coordenadas normalizadas a píxeles: los landmarks vienen normalizados
+  /// contra el fotograma, no contra la vista previa.
+  Size? _frameSize;
 
   bool _initializing = true;
   String? _initError;
@@ -153,12 +167,39 @@ class _HandMeasurementScreenState extends State<HandMeasurementScreen> {
 
       await controller.startImageStream((image) {
         if (_disposed) return;
+        // El detector normaliza los landmarks contra el fotograma que recibe,
+        // así que hay que guardar SUS dimensiones. `previewSize` es otra
+        // resolución distinta y usarla desviaba todas las medidas.
+        final frameSize = _orientedFrameSize(
+          image,
+          controller.description.sensorOrientation,
+        );
+        if (frameSize != _frameSize) {
+          // Se recalcula con el tamaño nuevo para que las medidas ya visibles
+          // no se queden con la escala anterior.
+          _frameSize = frameSize;
+          if (_landmarks.length == 21) {
+            _recomputeMetrics();
+          }
+        }
         _detector?.processFrame(image, controller.description.sensorOrientation);
       });
     } catch (error) {
       if (!mounted) return;
       setState(() => _initError = _describeError(error));
     }
+  }
+
+  /// Tamaño del fotograma tal y como lo ve el detector, corregido por rotación.
+  ///
+  /// Con una orientación de sensor de 90° o 270° la imagen llega girada, de modo
+  /// que su ancho y su alto están intercambiados respecto al sensor. Si no se
+  /// corrige, se calculan distancias con la proporción equivocada.
+  static Size _orientedFrameSize(CameraImage image, int sensorOrientation) {
+    final swapped = sensorOrientation == 90 || sensorOrientation == 270;
+    return swapped
+        ? Size(image.height.toDouble(), image.width.toDouble())
+        : Size(image.width.toDouble(), image.height.toDouble());
   }
 
   void _onHands(List<HandPoint> landmarks) {
@@ -174,29 +215,36 @@ class _HandMeasurementScreenState extends State<HandMeasurementScreen> {
     }
 
     // El adaptador ya entrega solo la primera mano detectada.
-    final points = landmarks;
-    if (points.length < 21) return;
+    if (landmarks.length < 21) return;
 
-    final previewSize = _camera?.value.previewSize;
-    final width = previewSize?.width ?? 720;
-    final height = previewSize?.height ?? 1280;
+    setState(() {
+      _landmarks = landmarks;
+      _metrics = _computeMetrics(landmarks);
+    });
+  }
 
-    HandMetrics? metrics;
+  /// Recalcula las métricas con los landmarks y el fotograma actuales.
+  HandMetrics? _computeMetrics(List<HandPoint> landmarks) {
+    final frame = _frameSize;
+    if (frame == null) return null;
     try {
-      metrics = HandMetrics.fromLandmarks(
-        points,
-        frameWidth: width,
-        frameHeight: height,
+      return HandMetrics.fromLandmarks(
+        landmarks,
+        frameWidth: frame.width,
+        frameHeight: frame.height,
         referencePalmWidthCm: _referencePalmWidthCm,
       );
     } catch (error) {
       debugPrint('No se pudieron calcular las métricas: $error');
+      return null;
     }
+  }
 
-    setState(() {
-      _landmarks = points;
-      _metrics = metrics;
-    });
+  /// Vuelve a calcular con la calibración nueva, sin esperar a otro fotograma.
+  void _recomputeMetrics() {
+    final metrics = _computeMetrics(_landmarks);
+    if (!mounted) return;
+    setState(() => _metrics = metrics);
   }
 
   /// Aplica la calibración introducida por el usuario.
@@ -215,7 +263,7 @@ class _HandMeasurementScreenState extends State<HandMeasurementScreen> {
       _initError = null;
     });
     if (_landmarks.length == 21) {
-      _onHands(_landmarks);
+      _recomputeMetrics();
     }
   }
 
@@ -228,15 +276,16 @@ class _HandMeasurementScreenState extends State<HandMeasurementScreen> {
     }
 
     final unit = metrics.unitLabel;
-    final note = metrics.isCalibrated
-        ? 'Estimado a partir de los 21 puntos de la mano'
-        : 'Sin calibrar: valor en unidades relativas, no en centímetros';
+    final note = metrics.isEstimated
+        ? 'Estimado con el ancho de palma medio; calíbralo para ajustarlo'
+        : 'Estimado a partir de los 21 puntos de la mano';
 
-    final form = context.read<FormularioProvider>();
     final now = DateTime.now();
 
     void add(String label, double value, MeasurementKind kind) {
-      form.upsertMeasurement(
+      MeasurementStore.add(
+        context,
+        widget.target,
         Measurement(
           id: 'hand_${kind.name}_${now.microsecondsSinceEpoch}',
           label: label,
@@ -268,10 +317,10 @@ class _HandMeasurementScreenState extends State<HandMeasurementScreen> {
     );
 
     _showMessage(
-      metrics.isCalibrated
-          ? 'Medidas guardadas.'
-          : 'Medidas guardadas en unidades relativas. Calibra el ancho de palma '
-              'para obtener centímetros.',
+      metrics.isEstimated
+          ? 'Medidas guardadas. Son una estimación: calibra el ancho de palma '
+              'para ajustarlas a tu mano.'
+          : 'Medidas guardadas.',
     );
     Navigator.of(context).maybePop();
   }
@@ -310,6 +359,7 @@ class _HandMeasurementScreenState extends State<HandMeasurementScreen> {
             tooltip: 'Introducir la medida a mano',
             onPressed: () => Navigator.of(context).push(
               ManualMeasurementScreen.route(
+                target: widget.target,
                 defaultLabel: 'Ancho de palma',
                 suggestedLabels: const [
                   'Ancho de palma',
@@ -330,6 +380,7 @@ class _HandMeasurementScreenState extends State<HandMeasurementScreen> {
       return _UnsupportedPlatformView(
         onManual: () => Navigator.of(context).push(
           ManualMeasurementScreen.route(
+            target: widget.target,
             defaultLabel: 'Ancho de palma',
             suggestedLabels: const [
               'Ancho de palma',
@@ -407,7 +458,7 @@ class _HandMeasurementScreenState extends State<HandMeasurementScreen> {
                     child: Text(
                       _landmarks.isEmpty
                           ? 'Coloca la mano abierta frente a la cámara.'
-                          : 'Mano detectada. Ajusta la calibración para obtener centímetros.',
+                          : 'Mano detectada.',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.onInverseSurface,
                       ),
@@ -442,7 +493,7 @@ class _HandMeasurementScreenState extends State<HandMeasurementScreen> {
             LuminaSectionCard(
               title: 'Calibración',
               subtitle:
-                  'Mide el ancho de tu palma con una regla (de nudillo a nudillo) y escríbelo aquí.',
+                  'Mide el ancho de tu palma con una regla y escríbelo aquí para que las medidas se ajusten a tu mano.',
               leadingIcon: Icons.tune,
               child: Row(
                 children: [
@@ -475,9 +526,9 @@ class _HandMeasurementScreenState extends State<HandMeasurementScreen> {
             if (metrics != null)
               LuminaSectionCard(
                 title: 'Medidas de la mano',
-                subtitle: metrics.isCalibrated
-                    ? 'En centímetros, a partir de 21 puntos.'
-                    : 'Sin calibrar: valores en unidades relativas.',
+                subtitle: metrics.isEstimated
+                    ? 'Estimación. Calibra el ancho de palma para ajustarla.'
+                    : 'Medidas ajustadas a tu mano.',
                 leadingIcon: Icons.straighten,
                 child: Column(
                   children: [
@@ -515,9 +566,9 @@ class _HandMeasurementScreenState extends State<HandMeasurementScreen> {
                 ),
               )
             else
-              LuminaInfoBanner(
+              const LuminaInfoBanner(
                 message:
-                    'Sin mano detectada. Acércala y abre bien los dedos para que la cámara vea los 21 puntos.',
+                    'Acerca la mano a la cámara y abre bien los dedos para poder medirla.',
                 icon: Icons.back_hand,
                 tone: LuminaBannerTone.warning,
               ),

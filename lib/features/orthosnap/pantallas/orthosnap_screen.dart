@@ -9,6 +9,7 @@ import '../../accesibilidad/widgets/accessibility_fab.dart';
 import '../../formulario/modelos/formulario_modelos.dart';
 import '../../generacion3d/pantallas/generacion_screen.dart';
 import '../../generacion3d/providers/generation_provider.dart';
+import '../../medicion/modelos/measurement_target.dart';
 import '../../medicion/pantallas/medicion_hub_screen.dart';
 import '../modelos/orthosnap_modelos.dart';
 import '../providers/auth_provider.dart';
@@ -201,7 +202,7 @@ class _OrthoSnapScreenState extends State<OrthoSnapScreen> {
           // --- Datos clínicos ---
           LuminaSectionCard(
             title: 'Indicación clínica',
-            subtitle: 'Obligatoria. Se incluye en el prompt del modelo.',
+            subtitle: 'Obligatoria. Describe para qué se prescribe la órtesis.',
             leadingIcon: Icons.description_outlined,
             child: Column(
               children: [
@@ -294,8 +295,11 @@ class _OrthoSnapScreenState extends State<OrthoSnapScreen> {
                   icon: Icons.straighten,
                   pictogram: Icons.straighten,
                   isPrimary: false,
-                  onPressed: () =>
-                      Navigator.of(context).push(MedicionHubScreen.route()),
+                  onPressed: () => Navigator.of(context).push(
+                    MedicionHubScreen.route(
+                      target: MeasurementTarget.clinico,
+                    ),
+                  ),
                   hint: 'Abre la medición AR, de mano o manual',
                 ),
               ],
@@ -332,7 +336,7 @@ class _OrthoSnapScreenState extends State<OrthoSnapScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Notas profesionales',
                     helperText:
-                        'Se añaden al prompt. En inglés se interpretan mejor.',
+                        'Detalles de ajuste, materiales o cuidados del paciente.',
                     prefixIcon: Icon(Icons.notes),
                   ),
                   onChanged: auth.setNotes,
@@ -375,20 +379,14 @@ class _OrthoSnapScreenState extends State<OrthoSnapScreen> {
                 ),
                 _summaryRow(theme, 'Material', request.material),
                 const SizedBox(height: AppSpacing.lg),
-                LuminaInfoBanner(
-                  message:
-                      'El modelo se genera con estructura Voronoi, geometría '
-                      'transpirable y tolerancias de alta precisión para uso clínico.',
-                  icon: Icons.grid_on,
-                ),
-                const SizedBox(height: AppSpacing.lg),
+
                 AccessibleButton(
                   label: 'Generar órtesis',
                   icon: Icons.auto_awesome,
                   pictogram: Icons.auto_awesome,
                   busy: _generating,
                   onPressed: _generating ? null : _generate,
-                  hint: 'Envía la ficha clínica a Meshy AI',
+                  hint: 'Genera la órtesis a partir de la ficha clínica',
                 ),
               ],
             ),

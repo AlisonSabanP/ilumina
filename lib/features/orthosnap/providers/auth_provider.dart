@@ -182,6 +182,13 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Borra todas las medidas del paciente.
+  void clearMeasurements() {
+    touch();
+    _request = _request.copyWith(measurements: const <Measurement>[]);
+    notifyListeners();
+  }
+
   /// Valida el formulario clínico antes de generar.
   ///
   /// Se exige un diagnóstico y al menos una medida: generar una órtesis sin

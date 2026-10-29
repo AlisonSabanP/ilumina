@@ -11,14 +11,13 @@ import 'package:neom_ar/neom_ar.dart';
 // [VERIFICAR] Ruta interna del paquete: si `neom_ar` cambia de estructura en una
 // versión futura, habrá que ajustar este import.
 import 'package:neom_ar/ui/controllers/ar_measure_controller.dart';
-import 'package:provider/provider.dart';
 import 'package:sint/sint.dart';
 
 import '../../../core/app_spacing.dart';
 import '../../../shared/widgets/lumina_widgets.dart';
 import '../../accesibilidad/widgets/accessibility_fab.dart';
-import '../../formulario/modelos/formulario_provider.dart';
 import '../modelos/measurement_models.dart';
+import '../modelos/measurement_target.dart';
 import 'manual_measurement_screen.dart';
 
 /// Pantalla de medición AR de objetos, basada en `neom_ar`.
@@ -44,10 +43,19 @@ import 'manual_measurement_screen.dart';
 /// que funciona igual en ambas plataformas, y además admite entrada manual
 /// como respaldo si el hit test no devuelve resultados.
 class ArMeasurementScreen extends StatefulWidget {
-  const ArMeasurementScreen({super.key});
+  const ArMeasurementScreen({
+    super.key,
+    this.target = MeasurementTarget.formulario,
+  });
 
-  static Route<void> route() => MaterialPageRoute<void>(
-        builder: (_) => const ArMeasurementScreen(),
+  /// Dónde se guarda la medida.
+  final MeasurementTarget target;
+
+  static Route<void> route({
+    MeasurementTarget target = MeasurementTarget.formulario,
+  }) =>
+      MaterialPageRoute<void>(
+        builder: (_) => ArMeasurementScreen(target: target),
       );
 
   @override
@@ -235,16 +243,18 @@ class _ArMeasurementScreenState extends State<ArMeasurementScreen> {
     final measurement = _pending;
     if (measurement == null) return;
     final label = _labelController.text.trim();
-    context.read<FormularioProvider>().upsertMeasurement(
-          Measurement(
-            id: 'ar_${DateTime.now().microsecondsSinceEpoch}',
-            label: label.isEmpty ? 'Distancia AR' : label,
-            valueCm: measurement.distanceCm,
-            kind: MeasurementKind.arDistance,
-            source: MeasurementSource.ar,
-            timestamp: DateTime.now(),
-          ),
-        );
+    MeasurementStore.add(
+      context,
+      widget.target,
+      Measurement(
+        id: 'ar_${DateTime.now().microsecondsSinceEpoch}',
+        label: label.isEmpty ? 'Distancia AR' : label,
+        valueCm: measurement.distanceCm,
+        kind: MeasurementKind.arDistance,
+        source: MeasurementSource.ar,
+        timestamp: DateTime.now(),
+      ),
+    );
     Navigator.of(context).maybePop();
   }
 
@@ -481,6 +491,7 @@ class _ArMeasurementScreenState extends State<ArMeasurementScreen> {
   void _openManualEntry() {
     Navigator.of(context).push(
       ManualMeasurementScreen.route(
+        target: widget.target,
         defaultLabel: 'Distancia',
         suggestedLabels: const [
           'Largo del objeto',

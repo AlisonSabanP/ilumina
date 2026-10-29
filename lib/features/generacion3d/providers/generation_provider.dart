@@ -87,6 +87,14 @@ class GenerationProvider extends ChangeNotifier {
   /// `true` si se está usando la clave de prueba gratuita de Meshy.
   bool get isTestMode => Env.isMeshyTestMode;
 
+  /// `true` si la generación va a usar la pieza de demostración local.
+  ///
+  /// Es el caso cuando no hay una clave real configurada. Meshy no tiene un
+  /// modo de prueba: sin clave propia, cualquier petición responde 401. En
+  /// lugar de mostrar un error, Lumina carga un `.glb` de ejemplo para que todo
+  /// el flujo (visor, descarga, compartir) se pueda probar sin coste.
+  bool get isDemoMode => Env.isMeshyTestMode;
+
   /// Progreso 0.0-1.0 de la fase actual.
   double get progress {
     switch (_phase) {
@@ -106,7 +114,14 @@ class GenerationProvider extends ChangeNotifier {
   }
 
   /// `true` cuando hay un modelo listo para visualizar.
-  bool get hasModel => _model != null && _model!.glbUrl.isNotEmpty;
+  ///
+  /// En modo de demostración el modelo se carga desde los assets, así que no
+  /// hay URL remota que comprobar.
+  bool get hasModel {
+    final model = _model;
+    if (model == null) return false;
+    return model.isLocalAsset || model.glbUrl.isNotEmpty;
+  }
 
   // --- Acciones --------------------------------------------------------------
 
@@ -234,6 +249,11 @@ class GenerationProvider extends ChangeNotifier {
   // --- Núcleo del flujo ------------------------------------------------------
 
   /// Ejecuta el ciclo completo: crear tarea -> sondear -> construir modelo.
+  ///
+  /// En modo de demostración (sin clave propia) no se llama a Meshy: se carga
+  /// la pieza de ejemplo incluida en la app. Meshy responde 401 sin una clave
+  /// válida, así que llamar a la API solo produciría un error que el usuario no
+  /// puede resolver desde la app.
   Future<void> _run({
     required PromptBuildResult built,
     required String title,
@@ -245,6 +265,11 @@ class GenerationProvider extends ChangeNotifier {
     _model = null;
     _task = null;
     _cancelRequested = false;
+
+    if (isDemoMode) {
+      await _runDemo(built: built, title: title, material: material);
+      return;
+    }
 
     try {
       _phase = GenerationPhase.creating;
@@ -322,6 +347,81 @@ class GenerationProvider extends ChangeNotifier {
     _error = error;
     _phase = GenerationPhase.failed;
     notifyListeners();
+  }
+
+  // --- Modo de demostración --------------------------------------------------
+
+  /// Pieza de ejemplo empaquetada en la app. Se declara en `pubspec.yaml`.
+  static const String demoAssetPath = 'assets/models/demo_pieza.glb';
+
+  /// Simula el flujo de generación con una pieza local.
+  ///
+  /// Mantiene las mismas fases que la generación real para que la UI no cambie,
+  /// pero no hace ninguna llamada de red ni consume créditos.
+  Future<void> _runDemo({
+    required PromptBuildResult built,
+    required String title,
+    String? material,
+  }) async {
+    _phase = GenerationPhase.creating;
+    notifyListeners();
+
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    if (_cancelRequested) {
+      _cancelDemo();
+      return;
+    }
+
+    _phase = GenerationPhase.polling;
+    _task = MeshyTask(
+      id: 'demo',
+      status: MeshyTaskStatus.inProgress,
+      progress: 0,
+    );
+    notifyListeners();
+
+    // Progreso simulado, para que se vea que el flujo avanza.
+    for (final step in const <int>[25, 50, 75, 100]) {
+      await Future<void>.delayed(const Duration(milliseconds: 450));
+      if (_cancelRequested) {
+        _cancelDemo();
+        return;
+      }
+      _task = MeshyTask(
+        id: 'demo',
+        status: step == 100
+            ? MeshyTaskStatus.succeeded
+            : MeshyTaskStatus.inProgress,
+        progress: step,
+      );
+      notifyListeners();
+    }
+
+    final model = GeneratedModel(
+      id: 'demo_${DateTime.now().microsecondsSinceEpoch}',
+      title: title,
+      prompt: built.prompt,
+      glbUrl: '',
+      assetPath: demoAssetPath,
+      taskId: 'demo',
+      createdAt: DateTime.now(),
+      material: material,
+      isDemo: true,
+    );
+
+    _model = model;
+    _phase = GenerationPhase.succeeded;
+    _addToHistory(model);
+    notifyListeners();
+  }
+
+  void _cancelDemo() {
+    _fail(
+      const MeshyException(
+        message: 'Demostración detenida.',
+        kind: MeshyErrorKind.timeout,
+      ),
+    );
   }
 
   @override

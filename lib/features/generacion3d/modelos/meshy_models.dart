@@ -215,10 +215,12 @@ class GeneratedModel {
     required this.prompt,
     required this.glbUrl,
     this.localPath,
+    this.assetPath,
     this.thumbnailUrl,
     this.taskId,
     this.createdAt,
     this.material,
+    this.isDemo = false,
   });
 
   final String id;
@@ -229,23 +231,41 @@ class GeneratedModel {
   /// Ruta del `.glb` guardado en el dispositivo, si ya se descargó.
   final String? localPath;
 
+  /// Ruta de un `.glb` empaquetado en la app. Se usa en el modo de
+  /// demostración, que no depende de Meshy ni de la red.
+  final String? assetPath;
+
   final String? thumbnailUrl;
   final String? taskId;
   final DateTime? createdAt;
   final String? material;
 
+  /// `true` si el modelo es la pieza de demostración incluida en la app.
+  final bool isDemo;
+
   bool get isDownloaded => localPath != null;
 
-  GeneratedModel copyWith({String? localPath, String? title}) => GeneratedModel(
+  /// `true` si el modelo se carga desde los assets y no desde la red.
+  bool get isLocalAsset => assetPath != null;
+
+  GeneratedModel copyWith({
+    String? localPath,
+    String? title,
+    String? assetPath,
+    bool? isDemo,
+  }) =>
+      GeneratedModel(
         id: id,
         title: title ?? this.title,
         prompt: prompt,
         glbUrl: glbUrl,
         localPath: localPath ?? this.localPath,
+        assetPath: assetPath ?? this.assetPath,
         thumbnailUrl: thumbnailUrl,
         taskId: taskId,
         createdAt: createdAt,
         material: material,
+        isDemo: isDemo ?? this.isDemo,
       );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -254,10 +274,12 @@ class GeneratedModel {
         'prompt': prompt,
         'glbUrl': glbUrl,
         'localPath': localPath,
+        'assetPath': assetPath,
         'thumbnailUrl': thumbnailUrl,
         'taskId': taskId,
         'createdAt': createdAt?.toIso8601String(),
         'material': material,
+        'isDemo': isDemo,
       };
 
   static GeneratedModel fromJson(Map<String, dynamic> json) => GeneratedModel(
@@ -266,9 +288,11 @@ class GeneratedModel {
         prompt: json['prompt'] as String? ?? '',
         glbUrl: json['glbUrl'] as String? ?? '',
         localPath: json['localPath'] as String?,
+        assetPath: json['assetPath'] as String?,
         thumbnailUrl: json['thumbnailUrl'] as String?,
         taskId: json['taskId'] as String?,
         createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
         material: json['material'] as String?,
+        isDemo: json['isDemo'] as bool? ?? false,
       );
 }

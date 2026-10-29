@@ -244,14 +244,13 @@ class _ProGripScreenState extends State<ProGripScreen> {
           // --- Notas ---
           LuminaSectionCard(
             title: 'Requisitos adicionales',
-            subtitle: 'Se añaden al prompt tal cual. Escríbelos en inglés para '
-                'que Meshy los interprete mejor.',
+            subtitle: 'Detalles de ajuste o de uso que quieras añadir.',
             leadingIcon: Icons.notes,
             child: TextField(
               maxLines: 3,
               minLines: 2,
               decoration: const InputDecoration(
-                hintText: 'Add a quick-release buckle on the wrist strap',
+                hintText: 'Por ejemplo: añade una correa de velcro ajustable',
                 prefixIcon: Icon(Icons.edit_note),
               ),
               onChanged: progrip.setNotes,

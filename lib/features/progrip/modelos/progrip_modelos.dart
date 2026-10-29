@@ -136,16 +136,6 @@ enum ToolAdapter {
       'Keep the saw blade aligned with the forearm to reduce wrist torque',
     ],
   ),
-  drill(
-    'Taladro',
-    Icons.build_circle,
-    'power drill',
-    45,
-    <String>[
-      'The tool adapter is a drill cradle that rests on the forearm and dampens vibration',
-      'Add a large trigger paddle that can be pressed with the whole hand',
-    ],
-  ),
   knife(
     'Cuchillo',
     Icons.cut,

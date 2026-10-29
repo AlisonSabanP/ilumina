@@ -14,8 +14,9 @@ import '../servicios/model_download_service.dart';
 
 /// Visor 3D del modelo generado.
 ///
-/// Usa `Power3D.fromNetwork`, que carga el `.glb` en un visor Babylon.js
-/// embebido en un WebView. El [Power3DController] expone el control fino:
+/// Carga el `.glb` con `Power3D`: `fromNetwork` para los modelos de Meshy y
+/// `fromAsset` para la pieza de demostración incluida en la app. El
+/// [Power3DController] expone el control fino:
 ///
 ///  * `updateRotation`  -> activar/desactivar la rotación automática.
 ///  * `resetView`       -> centrar la cámara.
@@ -46,8 +47,11 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
   String? _statusMessage;
   String? _localPath;
 
+  /// `true` si el modelo es la pieza de demostración incluida en la app.
+  bool get _isDemo => widget.model.isLocalAsset;
+
   /// Se usa la URL local si el modelo ya está descargado: así el visor
-  /// funciona sin conexión.
+  /// funciona sin conexión. Si no, la URL remota de Meshy.
   String get _modelUrl {
     final local = _localPath;
     if (local != null && File(local).existsSync()) {
@@ -128,11 +132,17 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
       _statusMessage = 'Descargando el modelo...';
     });
     try {
-      final path = await _downloader.download(
-        id: widget.model.id,
-        url: widget.model.glbUrl,
-        title: widget.model.title,
-      );
+      final path = _isDemo
+          ? await _downloader.exportAsset(
+              assetPath: widget.model.assetPath!,
+              id: widget.model.id,
+              title: widget.model.title,
+            )
+          : await _downloader.download(
+              id: widget.model.id,
+              url: widget.model.glbUrl,
+              title: widget.model.title,
+            );
       if (!mounted) return;
       setState(() {
         _localPath = path;
@@ -158,11 +168,17 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
     });
     try {
       final path = _localPath ??
-          await _downloader.download(
-            id: widget.model.id,
-            url: widget.model.glbUrl,
-            title: widget.model.title,
-          );
+          (_isDemo
+              ? await _downloader.exportAsset(
+                  assetPath: widget.model.assetPath!,
+                  id: widget.model.id,
+                  title: widget.model.title,
+                )
+              : await _downloader.download(
+                  id: widget.model.id,
+                  url: widget.model.glbUrl,
+                  title: widget.model.title,
+                ));
       if (!mounted) return;
       setState(() => _localPath = path);
       context.read<GenerationProvider>().markDownloaded(widget.model.id, path);
@@ -212,22 +228,38 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
                     label:
                         'Visor 3D del modelo ${widget.model.title}. Arrastra para rotar y pellizca para acercar.',
                     container: true,
-                    child: Power3D.fromNetwork(
-                      _modelUrl,
-                      controller: _controller,
-                      loadingUi: (context, controller) =>
-                          const LuminaLoadingView(
-                        message: 'Cargando el modelo 3D...',
-                      ),
-                      errorWidget: LuminaErrorView(
-                        title: 'No se pudo mostrar el modelo',
-                        message:
-                            'Comprueba tu conexión. Si el modelo lleva más de tres días '
-                            'en Meshy, puede haber caducado: vuelve a generarlo.',
-                        onRetry: _configureController,
-                        retryLabel: 'Reintentar',
-                      ),
-                    ),
+                    child: _isDemo
+                        ? Power3D.fromAsset(
+                            widget.model.assetPath!,
+                            controller: _controller,
+                            loadingUi: (context, controller) =>
+                                const LuminaLoadingView(
+                              message: 'Cargando la pieza de ejemplo...',
+                            ),
+                            errorWidget: LuminaErrorView(
+                              title: 'No se pudo mostrar la pieza de ejemplo',
+                              message:
+                                  'La pieza incluida en la app no se pudo cargar.',
+                              onRetry: _configureController,
+                              retryLabel: 'Reintentar',
+                            ),
+                          )
+                        : Power3D.fromNetwork(
+                            _modelUrl,
+                            controller: _controller,
+                            loadingUi: (context, controller) =>
+                                const LuminaLoadingView(
+                              message: 'Cargando el modelo 3D...',
+                            ),
+                            errorWidget: LuminaErrorView(
+                              title: 'No se pudo mostrar el modelo',
+                              message:
+                                  'Comprueba tu conexión. Si el modelo lleva más de tres días '
+                                  'en Meshy, puede haber caducado: vuelve a generarlo.',
+                              onRetry: _configureController,
+                              retryLabel: 'Reintentar',
+                            ),
+                          ),
                   ),
                 ),
                 // Indicador de estado superpuesto.

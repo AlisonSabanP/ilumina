@@ -181,8 +181,10 @@ class HandPoint {
 /// —medido con una regla o con la pantalla de medición AR— y de ahí se obtiene
 /// el factor `cm/píxel` que se aplica a todas las demás distancias.
 ///
-/// Sin calibración, las medidas de la mano se muestran en **unidades
-/// relativas** y se marcan como tales, en lugar de inventar centímetros.
+/// Si el usuario todavía no ha calibrado, se usa [defaultReferencePalmWidthCm]
+/// y el resultado se marca con [isEstimated]: son centímetros de orden de
+/// magnitud creíble, pero conviene sustituirlos por una calibración real antes
+/// de imprimir.
 class HandMetrics {
   const HandMetrics({
     required this.handSpan,
@@ -192,7 +194,15 @@ class HandMetrics {
     required this.middleFingerLength,
     required this.cmPerPixel,
     required this.confidence,
+    this.isEstimated = false,
   });
+
+  /// Ancho de palma de referencia por defecto, en centímetros.
+  ///
+  /// Media antropométrica de una persona adulta, de nudillo a nudillo. Se usa
+  /// cuando el usuario aún no ha calibrado, para que las medidas aparezcan en
+  /// centímetros y con un orden de magnitud creíble desde el primer momento.
+  static const double defaultReferencePalmWidthCm = 8.5;
 
   /// Distancia punta del pulgar (4) a punta del meñique (20), en cm.
   final double handSpan;
@@ -215,6 +225,12 @@ class HandMetrics {
   /// 0.0-1.0: fracción de landmarks con coordenadas válidas dentro de [0,1].
   final double confidence;
 
+  /// `true` si los centímetros salen de una calibración hecha por el usuario.
+  /// Si es `false` pero [isCalibrated] es `true`, son una estimación con el
+  /// ancho de palma medio.
+  final bool isEstimated;
+
+  /// `true` si los valores están en centímetros (medidos o estimados).
   bool get isCalibrated => cmPerPixel != null;
 
   /// Etiqueta de unidad que debe mostrarse junto a los valores.
@@ -222,13 +238,16 @@ class HandMetrics {
 
   /// Calcula las métricas a partir de los landmarks.
   ///
-  /// [frameWidth] y [frameHeight] deben ser el tamaño de la imagen analizada
-  /// (por ejemplo `previewSize` del `CameraController`), para poder trabajar en
-  /// píxeles y corregir la diferencia de proporción entre `x` e `y`.
+  /// [frameWidth] y [frameHeight] deben ser el tamaño **real** de la imagen que
+  /// se envió al detector, es decir `CameraImage.width` y `CameraImage.height`
+  /// ya corregidos por la rotación del sensor. Es un error frecuente pasar aquí
+  /// el `previewSize` del `CameraController`: la vista previa y el flujo de
+  /// imágenes son dos resoluciones distintas, y usar la equivocada desvía todas
+  /// las distancias. Ver `hand_measurement_screen.dart`.
   ///
-  /// [referencePalmWidthCm] es la calibración: ancho real de la palma en cm.
-  /// Si se omite, `cmPerPixel` será nulo y los valores se devolverán en
-  /// unidades relativas (píxeles), no en centímetros.
+  /// [referencePalmWidthCm] es la calibración: ancho real de la palma en cm. Si
+  /// se omite, se usa [defaultReferencePalmWidthCm] y el resultado se marca con
+  /// [isEstimated] para que la UI lo advierta.
   factory HandMetrics.fromLandmarks(
     List<HandPoint> landmarks, {
     required double frameWidth,
@@ -238,6 +257,12 @@ class HandMetrics {
     if (landmarks.length < 21) {
       throw ArgumentError(
         'Se esperaban 21 landmarks y se recibieron ${landmarks.length}',
+      );
+    }
+    if (frameWidth <= 0 || frameHeight <= 0) {
+      throw ArgumentError(
+        'El tamaño del fotograma debe ser positivo '
+        '(${frameWidth.toStringAsFixed(0)}x${frameHeight.toStringAsFixed(0)}).',
       );
     }
 
@@ -254,12 +279,16 @@ class HandMetrics {
       HandLandmark.pinkyMcp,
     );
 
+    final isEstimated = referencePalmWidthCm == null;
+    final reference = referencePalmWidthCm ?? defaultReferencePalmWidthCm;
+
     // El factor solo tiene sentido si la palma se ve con un tamaño razonable.
+    // Un `palmWidthPx` diminuto significa que la mano está lejísimos o que el
+    // fotograma no es el que se cree: en ese caso es mejor no calibrar que
+    // devolver centímetros absurdos.
     double? cmPerPixel;
-    if (referencePalmWidthCm != null &&
-        referencePalmWidthCm > 0 &&
-        palmWidthPx > 1) {
-      cmPerPixel = referencePalmWidthCm / palmWidthPx;
+    if (reference > 0 && palmWidthPx > 1) {
+      cmPerPixel = reference / palmWidthPx;
     }
 
     double convert(double px) => cmPerPixel == null ? px : px * cmPerPixel;
@@ -286,6 +315,7 @@ class HandMetrics {
       ),
       cmPerPixel: cmPerPixel,
       confidence: valid / 21,
+      isEstimated: isEstimated,
     );
   }
 }

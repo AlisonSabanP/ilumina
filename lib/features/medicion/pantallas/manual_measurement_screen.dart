@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../../../core/app_spacing.dart';
 import '../../../shared/widgets/lumina_widgets.dart';
 import '../../accesibilidad/providers/accessibility_provider.dart';
-import '../../formulario/modelos/formulario_provider.dart';
 import '../modelos/measurement_models.dart';
+import '../modelos/measurement_target.dart';
 import '../../accesibilidad/widgets/accessibility_fab.dart';
 
 /// Entrada manual de una medida.
@@ -18,6 +17,7 @@ class ManualMeasurementScreen extends StatefulWidget {
     super.key,
     this.defaultLabel = '',
     this.suggestedLabels = const <String>[],
+    this.target = MeasurementTarget.formulario,
   });
 
   final String defaultLabel;
@@ -25,14 +25,19 @@ class ManualMeasurementScreen extends StatefulWidget {
   /// Etiquetas sugeridas para agilizar la entrada (se muestran como chips).
   final List<String> suggestedLabels;
 
+  /// Dónde se guarda la medida.
+  final MeasurementTarget target;
+
   static Route<void> route({
     String defaultLabel = '',
     List<String> suggestedLabels = const <String>[],
+    MeasurementTarget target = MeasurementTarget.formulario,
   }) =>
       MaterialPageRoute<void>(
         builder: (_) => ManualMeasurementScreen(
           defaultLabel: defaultLabel,
           suggestedLabels: suggestedLabels,
+          target: target,
         ),
       );
 
@@ -92,16 +97,18 @@ class _ManualMeasurementScreenState extends State<ManualMeasurementScreen> {
       return;
     }
 
-    context.read<FormularioProvider>().upsertMeasurement(
-          Measurement(
-            id: 'manual_${DateTime.now().microsecondsSinceEpoch}',
-            label: label,
-            valueCm: valueCm,
-            kind: _kind,
-            source: MeasurementSource.manual,
-            timestamp: DateTime.now(),
-          ),
-        );
+    MeasurementStore.add(
+      context,
+      widget.target,
+      Measurement(
+        id: 'manual_${DateTime.now().microsecondsSinceEpoch}',
+        label: label,
+        valueCm: valueCm,
+        kind: _kind,
+        source: MeasurementSource.manual,
+        timestamp: DateTime.now(),
+      ),
+    );
     Navigator.of(context).maybePop();
   }
 
@@ -201,7 +208,7 @@ class _ManualMeasurementScreenState extends State<ManualMeasurementScreen> {
 
           LuminaSectionCard(
             title: 'Tipo de medida',
-            subtitle: 'Ayuda a Lumina a colocarla en el prompt del modelo.',
+            subtitle: 'Indica qué clase de medida es.',
             leadingIcon: Icons.category_outlined,
             child: Column(
               children: [

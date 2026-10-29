@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/app_spacing.dart';
+import '../../../shared/servicios/braille_service.dart';
 import '../../../shared/widgets/lumina_widgets.dart';
 import '../../accesibilidad/providers/accessibility_provider.dart';
 import '../modelos/formulario_provider.dart';
@@ -13,10 +14,16 @@ import '../../accesibilidad/widgets/accessibility_fab.dart';
 /// Generador de etiquetas en Braille.
 ///
 /// Usa el paquete `braille_text`:
-///  * [BrailleConverter] traduce texto plano a Braille Unicode.
-///  * [BrailleText] dibuja el resultado y, al deslizar el dedo por encima,
-///    emite una vibración corta por cada carácter, de modo que el usuario
-///    puede "leer" la etiqueta con el dedo antes de imprimirla.
+///  * [BrailleText] dibuja el Braille y, al deslizar el dedo por encima, emite
+///    una vibración corta por cada carácter, de modo que el usuario puede
+///    "leer" la etiqueta con el dedo antes de imprimirla.
+///  * [BrailleService] normaliza antes el texto (quita tildes y mayúsculas) y
+///    lo recorta, porque el conversor del paquete convierte a espacio todo lo
+///    que no esté en su tabla.
+///
+/// El texto que se ve aquí es el mismo que se graba en relieve en la pieza: se
+/// añade al prompt de generación, así que la etiqueta nace ya integrada en el
+/// objeto y no hay que imprimirla aparte.
 ///
 /// El tamaño de la fuente es ajustable porque el Braille en pantalla debe
 /// poder leerse con el dedo: a mayor tamaño, más separación entre puntos.
@@ -62,8 +69,10 @@ class _BrailleScreenState extends State<BrailleScreen> {
     setState(() {});
   }
 
-  String get _brailleOutput =>
-      BrailleConverter().convertToBraille(_controller.text);
+  /// Texto normalizado (sin tildes) y recortado, tal y como se imprimirá.
+  String get _labelText => BrailleService.prepareLabel(_controller.text);
+
+  String get _brailleOutput => BrailleService.toBraille(_controller.text);
 
   Future<void> _copy() async {
     await Clipboard.setData(ClipboardData(text: _brailleOutput));
@@ -81,8 +90,7 @@ class _BrailleScreenState extends State<BrailleScreen> {
         text: 'Etiqueta Lumina\n\n'
             'Texto: $text\n'
             'Braille: $_brailleOutput\n\n'
-            'Imprime esta etiqueta en relieve (altura de punto 1,5 mm) para '
-            'marcar el objeto.',
+            'Lumina la graba en relieve en la pieza (punto de 1,5 mm).',
         subject: 'Etiqueta en Braille generada con Lumina',
       ),
     );
@@ -108,7 +116,7 @@ class _BrailleScreenState extends State<BrailleScreen> {
           ),
           LuminaInfoBanner(
             message: hasText
-                ? 'Vista previa táctil activa. Cada carácter vibra al pasar el dedo.'
+                ? 'Esta etiqueta se graba en relieve en la pieza. Desliza el dedo por la vista previa para notar cada carácter.'
                 : 'Escribe algo para generar la etiqueta.',
             icon: hasText ? Icons.vibration : Icons.edit_note,
           ),
@@ -122,7 +130,8 @@ class _BrailleScreenState extends State<BrailleScreen> {
             decoration: const InputDecoration(
               labelText: 'Texto de la etiqueta',
               helperText:
-                  'Se admiten letras, números y signos básicos. Máximo 40 caracteres.',
+                  'Se admiten letras, números y signos básicos. Las tildes y las '
+                  'mayúsculas se simplifican. Máximo 40 caracteres.',
               prefixIcon: Icon(Icons.text_fields),
             ),
           ),
@@ -164,7 +173,7 @@ class _BrailleScreenState extends State<BrailleScreen> {
                       child: SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         child: BrailleText(
-                          text: text,
+                          text: _labelText,
                           textSize: _textSize,
                         ),
                       ),
@@ -182,7 +191,7 @@ class _BrailleScreenState extends State<BrailleScreen> {
           LuminaSectionCard(
             title: 'Texto Braille (seleccionable)',
             subtitle:
-                'Cópialo o compártelo para pegarlo en tu programa de diseño 3D.',
+                'Cópialo o compártelo si quieres grabarlo por tu cuenta.',
             leadingIcon: Icons.code,
             child: SelectableText(
               hasText ? _brailleOutput : '—',
@@ -209,10 +218,10 @@ class _BrailleScreenState extends State<BrailleScreen> {
           const SizedBox(height: AppSpacing.xl),
           LuminaInfoBanner(
             message:
-                'Para imprimir: exporta el Braille como relieve de 1,5 mm de altura y 2,5 mm entre puntos. '
-                'Esas medidas son las que permiten leerlo con el dedo en una pieza impresa.',
+                'Al generar el modelo, la etiqueta se pide con relieve de 1,5 mm '
+                'de altura y 2,5 mm entre puntos, que son las medidas que la '
+                'hacen legible con el dedo.',
             icon: Icons.print,
-            tone: LuminaBannerTone.warning,
           ),
           const SizedBox(height: AppSpacing.xxl),
         ],

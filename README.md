@@ -52,16 +52,21 @@ La clave **nunca** está en el código. Se resuelve en este orden
 (`lib/core/env.dart`):
 
 1. `--dart-define=MESHY_API_KEY=...` — recomendado para CI y release.
-2. El fichero `.env` — versionado, con la clave de prueba.
-3. La clave de prueba pública de Meshy
-   `msy_dummy_api_key_for_test_mode_12345678`, que no consume créditos pero
-   **no genera el modelo del prompt**: Meshy devuelve un resultado de
-   demostración. La app lo detecta y lo avisa en pantalla.
+2. El fichero `.env` — versionado, con un valor centinela.
+3. El valor centinela `msy_dummy_api_key_for_test_mode_12345678`.
+
+**Meshy no tiene modo de prueba gratuito.** Cualquier clave que no sea de una
+cuenta real recibe un `401 Invalid API key`. Por eso Lumina usa el valor
+centinela solo para saber que "no hay clave configurada" y, en ese caso,
+trabaja en **modo de demostración**: carga una pieza de ejemplo local
+(`assets/models/demo_pieza.glb`) para que el visor, la descarga y el uso
+compartido se puedan probar sin coste. Al configurar una clave real, la app
+llama a Meshy de verdad.
 
 Comandos exactos:
 
 ```bash
-# Sin configurar nada: usa la clave de prueba del .env versionado
+# Sin configurar nada: modo de demostración con la pieza de ejemplo local
 flutter run
 
 # Con tu clave real, sin tocar el .env
@@ -152,9 +157,11 @@ dos paneles afecta a toda la app.
 1. Elige tu necesidad: **Motriz**, **Visual** o **Cognitiva/Sensibilidad**.
 2. Responde las preguntas. El árbol se ramifica: cada respuesta abre la
    siguiente pregunta y, al final, una recomendación concreta de objeto.
-3. Opcionalmente, **Genera una etiqueta en Braille**: escribe el texto, ajusta
-   el tamaño y desliza el dedo por encima para "leerla" con vibración antes de
-   imprimirla. Se puede copiar o compartir.
+3. La pieza lleva una **etiqueta en Braille** automática (el título de la
+   recomendación). Puedes cambiarla: escribe el texto, ajusta el tamaño y
+   desliza el dedo por encima para "leerla" con vibración antes de generar. La
+   etiqueta se graba en relieve en el modelo, con 1,5 mm de altura y 2,5 mm
+   entre puntos.
 
 ### Tomar medidas
 
@@ -189,7 +196,7 @@ Desde el formulario, "Añadir medida" abre el centro de medición con tres vías
 
 Prótesis y adaptadores para el trabajo, en tres capas: base de acople, garfio
 funcional (dos dedos, tres dedos, gancho curvo, pinza de presión…) y adaptador
-de herramienta (martillo, destornillador, sierra, taladro, cuchillo, tijeras,
+de herramienta (martillo, destornillador, sierra, cuchillo, tijeras,
 pincel, rastrillo). Cada elección cambia el prompt, y las medidas de la mano se
 incorporan al diseño.
 
@@ -222,15 +229,15 @@ explícitamente estructura Voronoi, material transpirable y alta precisión.
 | `arkit_plugin` | 1.5.0 | AR iOS | `ARKitSceneView` con detección de planos (la parte que `neom_ar` deja al consumidor) |
 | `arcore_flutter_plugin` | 0.1.0 (fork local) | AR Android | `ArCoreView` con render de planos y hit test |
 | `sint` | 1.6.2 | Inyección de dependencias | `neom_ar` registra su controlador con Sint; Lumina lo declara porque lo usa directamente |
-| `power3d` | 2.3.0 | Visor 3D | `Power3D.fromNetwork` carga el `.glb` en un visor Babylon.js sobre WebView; `Power3DController` da rotación, zoom, centrado y bloqueo de paneo |
+| `power3d` | 2.3.0 | Visor 3D | `Power3D.fromNetwork` carga el `.glb` de Meshy y `Power3D.fromAsset` la pieza de demostración local, en un visor Babylon.js sobre WebView; `Power3DController` da rotación, zoom, centrado y bloqueo de paneo |
 | Meshy AI REST | v2 | Generación 3D | `POST /openapi/v2/text-to-3d` → `task_id` → `GET /openapi/v2/text-to-3d/{task_id}` hasta `SUCCEEDED` → descarga de `model_urls.glb` |
 
 ### Costes de Meshy
 
-- La clave `msy_dummy_api_key_for_test_mode_12345678` es la de **modo de
-  prueba**: no consume créditos y permite probar todo el flujo, pero Meshy
-  **no genera el modelo del prompt** (devuelve un resultado de demostración).
-  Es la que trae el `.env` versionado.
+- **No existe modo de prueba.** El valor
+  `msy_dummy_api_key_for_test_mode_12345678` que trae el `.env` versionado no
+  es válido: sirve solo de centinela. Mientras esté ahí, Lumina no llama a
+  Meshy y usa la pieza de demostración local. No gasta nada.
 - Con una clave real, cada tarea `preview` de text-to-3D consume créditos del
   plan. Hay plan gratuito con créditos mensuales limitados y planes de pago.
 - Lumina consulta `GET /openapi/v1/balance` y avisa antes de gastar.
@@ -311,27 +318,31 @@ carpeta.
 
 1. Genera una nueva en <https://www.meshy.ai/developers/keys>.
 2. Actualiza el `--dart-define=MESHY_API_KEY=...` de tu CI o de tu comando
-   local. El `.env` versionado no se toca: solo lleva la clave de prueba.
+   local. El `.env` versionado no se toca: solo lleva el valor centinela.
 3. La clave anterior se puede revocar desde el mismo panel. No hay que tocar
    ningún fichero del repositorio.
 
 ### Demo 100 % gratuita con modelos locales
 
-Para una presentación sin gastar créditos ni depender de la red:
+Ya está implementada. Sin clave de Meshy, la app entra en modo de
+demostración y carga `assets/models/demo_pieza.glb` con `Power3D.fromAsset`.
 
-1. Copia tus `.glb` a `assets/models/`.
-2. En `pubspec.yaml`, el directorio ya está declarado como asset.
-3. En `lib/features/visor3d/pantallas/visor_modelo_screen.dart`, sustituye
-   `Power3D.fromNetwork(url: _modelUrl, ...)` por
-   `Power3D.fromAsset(assetPath: 'assets/models/tu_pieza.glb', ...)`.
-4. El resto del visor (controlador, botones, descarga, compartir) no cambia.
+Para usar tu propia pieza:
+
+1. Copia tu `.glb` a `assets/models/`.
+2. Cambia `GenerationProvider.demoAssetPath`
+   (`lib/features/generacion3d/providers/generation_provider.dart`) por la ruta
+   de tu fichero. El directorio ya está declarado como asset en `pubspec.yaml`.
+3. El resto del visor (controlador, botones, descarga, compartir) no cambia.
+   `ModelDownloadService.exportAsset` copia el asset a disco para poder
+   compartirlo.
 
 ### Antes de publicar en las tiendas
 
 - Sustituir la firma de debug de `android/app/build.gradle.kts` por una clave
   de release propia (hay un `TODO` en el fichero).
 - Revisar que `applicationId` (`com.lumina.lumina`) es el definitivo.
-- Comprobar que el `.env` del commit sigue llevando **solo** la clave de prueba
+- Comprobar que el `.env` del commit sigue llevando **solo** el valor centinela
   y que la clave real va por `--dart-define` en el pipeline.
 - Verificar en un dispositivo Android real sin ARCore que la app instala y
   ofrece la medida manual.

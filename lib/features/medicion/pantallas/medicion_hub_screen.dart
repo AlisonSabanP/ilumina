@@ -2,13 +2,12 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../../../core/app_spacing.dart';
 import '../../../shared/widgets/lumina_widgets.dart';
 import '../../accesibilidad/providers/accessibility_provider.dart';
-import '../../formulario/modelos/formulario_provider.dart';
 import '../modelos/measurement_models.dart';
+import '../modelos/measurement_target.dart';
 import '../servicios/hand_detector.dart';
 import 'ar_measurement_screen.dart';
 import 'hand_measurement_screen.dart';
@@ -20,18 +19,30 @@ import '../../accesibilidad/widgets/accessibility_fab.dart';
 /// Reúne las tres vías del pliego en un solo punto de entrada y muestra el
 /// estado de cada una según la plataforma, para que el usuario no llegue nunca
 /// a una pantalla que no puede funcionar en su dispositivo.
+///
+/// [target] decide dónde se guardan las medidas: en el formulario inteligente o
+/// en la ficha clínica de OrthoSnap. Se propaga a las tres pantallas de
+/// medición.
 class MedicionHubScreen extends StatelessWidget {
-  const MedicionHubScreen({super.key});
+  const MedicionHubScreen({
+    super.key,
+    this.target = MeasurementTarget.formulario,
+  });
 
-  static Route<void> route() => MaterialPageRoute<void>(
-        builder: (_) => const MedicionHubScreen(),
+  final MeasurementTarget target;
+
+  static Route<void> route({
+    MeasurementTarget target = MeasurementTarget.formulario,
+  }) =>
+      MaterialPageRoute<void>(
+        builder: (_) => MedicionHubScreen(target: target),
       );
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final a11y = AccessibilityProvider.of(context);
-    final form = context.watch<FormularioProvider>();
+    final measurements = MeasurementStore.read(context, target);
 
     final arSupported = _arSupported();
     final handSupported = HandDetector.isSupported;
@@ -42,10 +53,11 @@ class MedicionHubScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.lg),
         children: [
-          const LuminaPageHeader(
+          LuminaPageHeader(
             title: 'Tomar medidas',
-            subtitle:
-                'Las medidas hacen que el modelo encaje de verdad. Puedes usar las tres vías y combinarlas.',
+            subtitle: target == MeasurementTarget.clinico
+                ? 'Mide al paciente. Las medidas se guardan en su ficha clínica.'
+                : 'Las medidas hacen que el modelo encaje de verdad. Puedes combinar las tres vías.',
             icon: Icons.straighten,
           ),
 
@@ -53,14 +65,15 @@ class MedicionHubScreen extends StatelessWidget {
           _MethodCard(
             title: 'Objetos con AR',
             description:
-                'Apunta con la cámara y toca los dos extremos del objeto. Precisión milimétrica con ARKit y ARCore.',
+                'Apunta con la cámara y toca los dos extremos del objeto.',
             icon: Icons.view_in_ar,
             available: arSupported,
             unavailableReason:
                 'La medición AR necesita un móvil Android o iPhone con ARCore o ARKit.',
             badge: 'Recomendado',
-            onOpen: () =>
-                Navigator.of(context).push(ArMeasurementScreen.route()),
+            onOpen: () => Navigator.of(context).push(
+              ArMeasurementScreen.route(target: target),
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
 
@@ -68,12 +81,13 @@ class MedicionHubScreen extends StatelessWidget {
           _MethodCard(
             title: 'Mano con 21 puntos',
             description:
-                'Detecta los puntos de la mano y calcula el ancho de palma, la envergadura y la apertura de agarre.',
+                'Calcula el ancho de palma, la envergadura y la apertura de agarre.',
             icon: Icons.back_hand,
             available: handSupported,
             unavailableReason: HandDetector.unsupportedReason,
-            onOpen: () =>
-                Navigator.of(context).push(HandMeasurementScreen.route()),
+            onOpen: () => Navigator.of(context).push(
+              HandMeasurementScreen.route(target: target),
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
 
@@ -81,19 +95,28 @@ class MedicionHubScreen extends StatelessWidget {
           _MethodCard(
             title: 'Medida a mano',
             description:
-                'Escribe una medida tomada con una regla. Es la opción más fiable y siempre está disponible.',
+                'Escribe una medida tomada con una regla. Siempre disponible.',
             icon: Icons.edit,
             available: true,
             onOpen: () => Navigator.of(context).push(
               ManualMeasurementScreen.route(
-                suggestedLabels: const [
-                  'Largo del objeto',
-                  'Ancho del objeto',
-                  'Alto del objeto',
-                  'Diámetro del mango',
-                  'Perímetro de muñeca',
-                  'Ancho de palma',
-                ],
+                target: target,
+                suggestedLabels: target == MeasurementTarget.clinico
+                    ? const [
+                        'Perímetro de muñeca',
+                        'Ancho de palma',
+                        'Largo del antebrazo',
+                        'Perímetro del tobillo',
+                        'Largo del pie',
+                      ]
+                    : const [
+                        'Largo del objeto',
+                        'Ancho del objeto',
+                        'Alto del objeto',
+                        'Diámetro del mango',
+                        'Perímetro de muñeca',
+                        'Ancho de palma',
+                      ],
               ),
             ),
           ),
@@ -102,36 +125,43 @@ class MedicionHubScreen extends StatelessWidget {
 
           // --- Medidas actuales ---
           LuminaSectionCard(
-            title: 'Medidas guardadas',
-            subtitle: form.measurements.isEmpty
+            title: target == MeasurementTarget.clinico
+                ? 'Medidas del paciente'
+                : 'Medidas guardadas',
+            subtitle: measurements.isEmpty
                 ? 'Todavía no hay ninguna medida.'
-                : '${form.measurements.length} medida(s) en el formulario.',
+                : '${measurements.length} medida(s) registradas.',
             leadingIcon: Icons.list_alt,
-            trailing: form.measurements.isEmpty
+            trailing: measurements.isEmpty
                 ? null
                 : TextButton.icon(
-                    onPressed: form.clearMeasurements,
+                    onPressed: () =>
+                        MeasurementStore.clear(context, target),
                     icon: const Icon(Icons.delete_outline),
                     label: const Text('Borrar todas'),
                   ),
-            child: form.measurements.isEmpty
+            child: measurements.isEmpty
                 ? Text(
-                    'Cuando midas algo aparecerá aquí y se añadirá al prompt del modelo.',
+                    'Cuando midas algo aparecerá aquí.',
                     style: theme.textTheme.bodySmall,
                   )
                 : Column(
                     children: [
-                      for (final measurement in form.measurements)
+                      for (final measurement in measurements)
                         _MeasurementTile(
                           measurement: measurement,
-                          onRemove: () =>
-                              form.removeMeasurement(measurement.id),
+                          onRemove: () => MeasurementStore.remove(
+                            context,
+                            target,
+                            measurement.id,
+                          ),
                         ),
                     ],
                   ),
           ),
 
-          if (a11y.bigButtons) ...[
+          if (target == MeasurementTarget.formulario &&
+              a11y.bigButtons) ...[
             const SizedBox(height: AppSpacing.md),
             const LuminaInfoBanner(
               message:

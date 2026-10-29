@@ -14,6 +14,14 @@ flutter build apk --debug
 flutter build apk --release   # ~5 min; R8 tarda
 ```
 
+Para probar en un móvil concreto, compila solo su arquitectura: el APK de debug
+pasa de 233 MiB a ~62 MiB y evita los fallos de instalación por falta de
+espacio.
+
+```bash
+flutter run --target-platform android-arm64
+```
+
 Android necesita JDK 17, Android SDK 36 y NDK 28.2.13676358.
 `android/gradle.properties` usa `-Xmx4G`: subirlo provoca que el runtime se
 quede sin memoria al compilar MediaPipe junto con el WebView de `power3d`.
@@ -111,6 +119,27 @@ propio `analysis_options.yaml` relajado. No añadas lints ahí.
 | Ajuste | Dónde | Sin él |
 | --- | --- | --- |
 | `android.newDsl=false` | `android/gradle.properties` | El plugin de Flutter no aplica el DSL clásico |
+
+## El `abiFilters` no controla las ABI del APK
+
+`android/app/build.gradle.kts` declara
+`ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }`, pero **el APK sigue
+incluyendo `x86_64`**: el plugin Gradle de Flutter sobrescribe esa lista con las
+ABI que se le piden compilar. Verificado en los dos artefactos:
+
+| Artefacto | Tamaño | ABI incluidas |
+| --- | --- | --- |
+| `app-debug.apk` | 233 MiB | arm64-v8a, armeabi-v7a, **x86_64** |
+| `app-release.apk` | 97 MiB | arm64-v8a, armeabi-v7a, **x86_64** |
+
+Para reducir el tamaño de verdad hay que usar la línea de comandos:
+`--target-platform android-arm64` (deja el debug en ~62 MiB) o
+`--split-per-abi`. No intentes "arreglarlo" tocando `abiFilters` otra vez: no
+tiene efecto sobre el APK final.
+
+Un APK de debug de 233 MiB es también la causa más común de
+`adb: failed to install` en el móvil (falta de espacio). Ver la sección de
+errores probables del README.
 
 ## Al tocar el servicio de Meshy
 

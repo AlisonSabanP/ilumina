@@ -30,8 +30,16 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
-        // MediaPipe (hand_landmarker) trae bibliotecas nativas grandes: sin este
-        // filtro el APK de release incluiría símbolos de todas las ABI.
+        // MediaPipe (hand_landmarker) y el motor de Flutter traen bibliotecas
+        // nativas muy grandes (el APK de debug pasa de 200 MiB).
+        //
+        // OJO: este filtro NO limita las ABI del APK final. El plugin Gradle de
+        // Flutter sobrescribe `ndk.abiFilters` con la lista de ABI que se le
+        // pide compilar, así que aquí siguen entrando `x86_64` y `armeabi-v7a`
+        // aunque no estén declaradas. Para reducir el tamaño de verdad hay que
+        // usar `--target-platform android-arm64` o `--split-per-abi` en la
+        // línea de comandos. Se deja declarado porque documenta la intención y
+        // sí afecta a los AAR de dependencias.
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
         }
@@ -45,9 +53,8 @@ android {
             signingConfig = signingConfigs.getByName("debug")
 
             // R8 elimina y ofusca el código no usado. Las reglas de
-            // `proguard-rules.pro` cubren Sceneform, MediaPipe y los puentes
-            // nativos/JS de los plugins, que no son visibles al análisis
-            // estático de R8.
+            // `proguard-rules.pro` cubren MediaPipe y los puentes nativos/JS
+            // de los plugins, que no son visibles al análisis estático de R8.
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

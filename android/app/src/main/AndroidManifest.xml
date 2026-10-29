@@ -12,7 +12,18 @@
     <!-- Cámara. Se marca como NO obligatoria para que la app se pueda instalar
          en un dispositivo sin cámara; en ese caso la medición con la cámara
          queda deshabilitada, pero la medida a mano y el resto de Lumina siguen
-         funcionando. -->
+         funcionando.
+
+         `android.hardware.camera.any` lo aporta el plugin `camera_android_camerax`
+         con `required` implícito en `true`, y el fusionador de manifiestos usa
+         "o lógico": basta que una parte lo pida obligatorio para que lo sea. Por
+         eso hace falta `tools:replace`, no basta con declarar `required="false"`
+         aquí: sin él, el APK acaba exigiendo cámara y la app desaparece de Play
+         Store en tablets y dispositivos sin cámara. -->
+    <uses-feature
+        android:name="android.hardware.camera.any"
+        android:required="false"
+        tools:replace="android:required" />
     <uses-feature
         android:name="android.hardware.camera"
         android:required="false" />

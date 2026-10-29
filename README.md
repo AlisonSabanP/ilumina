@@ -381,8 +381,8 @@ disco con `rootBundle.load` y lo comparte con `share_plus`.
 - Revisar que `applicationId` (`com.lumina.lumina`) es el definitivo.
 - Comprobar que el `.env` del commit sigue llevando **solo** el valor centinela
   y que la clave real va por `--dart-define` en el pipeline.
-- Verificar en un dispositivo Android real sin ARCore que la app instala y
-  ofrece la medida manual.
+- Verificar en un dispositivo Android real que la app instala y ofrece la
+  medida manual.
 - En iOS: ejecutar `pod install` y el build en un Mac, y rellenar la ficha de
   privacidad (la cámara y la galería se declaran en `Info.plist`).
 - Repasar las reglas de `proguard-rules.pro` si se añaden dependencias nuevas
@@ -412,15 +412,40 @@ disco con `rootBundle.load` y lo comparte con `share_plus`.
    centinela: la app genera en el dispositivo en ese caso.
 7. **Error 402 de Meshy** — la cuenta no tiene plan o se agotaron los créditos.
    El mensaje de la app lo explica.
-8. **El primer `flutter build apk` tarda mucho** — Gradle descarga el NDK
+8. **`adb: failed to install ... app-debug.apk` al hacer `flutter run`** — el
+   APK de debug pesa ~233 MiB porque lleva tres arquitecturas (`arm64-v8a`,
+   `armeabi-v7a` y `x86_64`). Causas habituales, en orden de probabilidad:
+
+   - **Almacenamiento insuficiente.** `INSTALL_FAILED_INSUFFICIENT_STORAGE`.
+     El instalador necesita copiar el APK y luego extraerlo: con 233 MiB hacen
+     falta ~500 MiB libres. Libera espacio o compila solo tu arquitectura:
+     `flutter run --target-platform android-arm64` (el APK baja a ~62 MiB).
+   - **Permiso de instalación por USB.** En Huawei/Honor y en Xiaomi/MIUI es
+     obligatorio activarlo, o el sistema rechaza cualquier `adb install`.
+     Ajustes -> Sistema -> Opciones de desarrollador -> *Instalar aplicaciones
+     vía USB* (en MIUI además *Depuración USB (Ajustes de seguridad)*).
+     También ayuda `adb install -r -d` y desinstalar antes:
+     `adb uninstall com.lumina.lumina`.
+   - **Firma distinta.** Si ya había una copia instalada firmada con otra clave
+     (por ejemplo, la de release), falla con `INSTALL_FAILED_UPDATE_INCOMPATIBLE`.
+     Desinstala la anterior.
+
+   El motivo exacto sale truncado en la consola de PowerShell. Para verlo
+   entero, ejecuta el `adb` a mano:
+
+   ```powershell
+   adb install -r "build\app\outputs\flutter-apk\app-debug.apk"
+   ```
+
+9. **El primer `flutter build apk` tarda mucho** — Gradle descarga el NDK
    (~2 GB) y compila MediaPipe. Es normal la primera vez.
-9. **`flutter build apk` se queda sin memoria** — MediaPipe es pesado.
-   `android/gradle.properties` está ajustado a `-Xmx4G`; en una máquina con
-   menos de 8 GB puede haber que bajarlo más.
-10. **`No file or variants found for asset: .env`** — falta el fichero `.env`.
+10. **`flutter build apk` se queda sin memoria** — MediaPipe es pesado.
+    `android/gradle.properties` está ajustado a `-Xmx4G`; en una máquina con
+    menos de 8 GB puede haber que bajarlo más.
+11. **`No file or variants found for asset: .env`** — falta el fichero `.env`.
     Se versiona precisamente para que no pase; si lo has borrado, recupéralo
     con `git checkout -- .env`.
-11. **`Could not close incremental caches in ... caches-jvm` en Windows** —
+12. **`Could not close incremental caches in ... caches-jvm` en Windows** —
     el pub-cache está en una unidad distinta a la del proyecto (`D:\` y `C:\`).
     Kotlin guarda las rutas de sus cachés relativas a la raíz del proyecto, y
     entre discos distintos no existe ruta relativa. Ya está mitigado con

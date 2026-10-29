@@ -30,19 +30,19 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
-        // MediaPipe (hand_landmarker) y el motor de Flutter traen bibliotecas
-        // nativas muy grandes (el APK de debug pasa de 200 MiB).
+        // Aquí NO hay bloque `ndk { abiFilters }`, a propósito.
         //
-        // OJO: este filtro NO limita las ABI del APK final. El plugin Gradle de
-        // Flutter sobrescribe `ndk.abiFilters` con la lista de ABI que se le
-        // pide compilar, así que aquí siguen entrando `x86_64` y `armeabi-v7a`
-        // aunque no estén declaradas. Para reducir el tamaño de verdad hay que
-        // usar `--target-platform android-arm64` o `--split-per-abi` en la
-        // línea de comandos. Se deja declarado porque documenta la intención y
-        // sí afecta a los AAR de dependencias.
-        ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
-        }
+        // Tenía uno, y era un error por dos motivos:
+        //  1. No servía de nada: el plugin Gradle de Flutter sobrescribe
+        //     `ndk.abiFilters` con la lista de ABI que se le pide compilar, así
+        //     que el APK incluía `x86_64` igualmente.
+        //  2. Rompía `--split-per-abi`: Gradle aborta con "Conflicting
+        //     configuration ... in ndk abiFilters cannot be present when splits
+        //     abi filters are set" porque no admite las dos cosas a la vez.
+        //
+        // La forma correcta de limitar las arquitecturas es la línea de
+        // comandos: `--target-platform android-arm64` (un solo APK) o
+        // `--split-per-abi` (un APK por arquitectura). No lo repongas.
     }
 
     buildTypes {

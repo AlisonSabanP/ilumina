@@ -120,26 +120,39 @@ propio `analysis_options.yaml` relajado. No añadas lints ahí.
 | --- | --- | --- |
 | `android.newDsl=false` | `android/gradle.properties` | El plugin de Flutter no aplica el DSL clásico |
 
-## El `abiFilters` no controla las ABI del APK
+## No pongas `ndk { abiFilters }` en `build.gradle.kts`
 
-`android/app/build.gradle.kts` declara
-`ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }`, pero **el APK sigue
-incluyendo `x86_64`**: el plugin Gradle de Flutter sobrescribe esa lista con las
-ABI que se le piden compilar. Verificado en los dos artefactos:
+Hubo uno y se quitó. Hacía daño de dos formas:
 
-| Artefacto | Tamaño | ABI incluidas |
-| --- | --- | --- |
-| `app-debug.apk` | 233 MiB | arm64-v8a, armeabi-v7a, **x86_64** |
-| `app-release.apk` | 97 MiB | arm64-v8a, armeabi-v7a, **x86_64** |
+1. **No limitaba nada.** El plugin Gradle de Flutter sobrescribe
+   `ndk.abiFilters` con las ABI que se le piden compilar, así que el APK seguía
+   incluyendo `x86_64`. Verificado en los artefactos:
 
-Para reducir el tamaño de verdad hay que usar la línea de comandos:
-`--target-platform android-arm64` (deja el debug en ~62 MiB) o
-`--split-per-abi`. No intentes "arreglarlo" tocando `abiFilters` otra vez: no
-tiene efecto sobre el APK final.
+   | Artefacto | Tamaño | ABI incluidas |
+   | --- | --- | --- |
+   | `app-debug.apk` | 233 MiB | arm64-v8a, armeabi-v7a, **x86_64** |
+   | `app-release.apk` | 97 MiB | arm64-v8a, armeabi-v7a, **x86_64** |
 
-Un APK de debug de 233 MiB es también la causa más común de
-`adb: failed to install` en el móvil (falta de espacio). Ver la sección de
-errores probables del README.
+2. **Rompe `--split-per-abi`.** Gradle aborta con:
+
+   ```
+   Conflicting configuration : 'armeabi-v7a,arm64-v8a' in ndk abiFilters
+   cannot be present when splits abi filters are set
+   ```
+
+   Es decir, el bloque impedía justamente la orden que sirve para reducir el
+   tamaño. No admite las dos configuraciones a la vez.
+
+La forma correcta de elegir arquitecturas es la línea de comandos:
+
+```bash
+flutter build apk --release --split-per-abi    # un APK por ABI (~28 MiB arm64)
+flutter run --target-platform android-arm64    # un solo APK (~62 MiB debug)
+```
+
+Un APK de debug de 233 MiB es además la causa más común de
+`adb: failed to install` (falta de espacio en el móvil). Ver los errores
+probables del README.
 
 ## Al tocar el servicio de Meshy
 

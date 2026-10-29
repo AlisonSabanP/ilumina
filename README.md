@@ -437,6 +437,26 @@ disco con `rootBundle.load` y lo comparte con `share_plus`.
    adb install -r "build\app\outputs\flutter-apk\app-debug.apk"
    ```
 
+   Si el mensaje sigue siendo escueto, estas órdenes dan el motivo real:
+
+   ```powershell
+   adb shell getprop ro.product.cpu.abi   # arquitectura: debe ser arm64-v8a
+   adb shell df -h /data                  # espacio libre: hacen falta ~500 MiB
+   adb install -r --no-streaming "build\app\outputs\flutter-apk\app-debug.apk"
+   ```
+
+   `--no-streaming` empuja el fichero y luego lo instala, en lugar de
+   transmitirlo; en algunos dispositivos y cables USB el modo *streamed* se
+   corta. Y para leer el rechazo del gestor de paquetes:
+
+   ```powershell
+   adb logcat -d | Select-String -Pattern "PackageManager.*(INSTALL|Failure)"
+   ```
+
+   En Huawei/Honor, además, *Instalar aplicaciones vía USB* exige tener sesión
+   de cuenta Huawei e internet en el móvil; sin eso la opción no se queda
+   activada aunque la marques.
+
 9. **El primer `flutter build apk` tarda mucho** — Gradle descarga el NDK
    (~2 GB) y compila MediaPipe. Es normal la primera vez.
 10. **`flutter build apk` se queda sin memoria** — MediaPipe es pesado.

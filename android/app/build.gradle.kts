@@ -19,8 +19,8 @@ android {
         applicationId = "com.lumina.lumina"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        // ARCore (arcore_flutter_plugin) exige 24; hand_landmarker también.
-        // Se fija explícitamente para no depender del valor por defecto del SDK.
+        // `hand_landmarker` (MediaPipe) exige 24. Se fija explícitamente para
+        // no depender del valor por defecto del SDK.
         minSdk = 24
         targetSdk = flutter.targetSdkVersion
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION

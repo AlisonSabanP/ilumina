@@ -346,7 +346,6 @@ class _ReviewStep extends StatelessWidget {
 
   IconData _sourceIcon(dynamic source) {
     final name = source.toString();
-    if (name.contains('ar')) return Icons.view_in_ar;
     if (name.contains('hand')) return Icons.back_hand;
     return Icons.edit;
   }

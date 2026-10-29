@@ -5,28 +5,100 @@ import 'package:lumina/shared/servicios/braille_service.dart';
 import 'package:lumina/features/accesibilidad/providers/accessibility_provider.dart';
 import 'package:lumina/features/formulario/modelos/formulario_modelos.dart';
 import 'package:lumina/features/formulario/modelos/formulario_provider.dart';
+import 'package:lumina/features/formulario/pantallas/braille_screen.dart';
 import 'package:lumina/features/generacion3d/providers/generation_provider.dart';
+import 'package:lumina/features/visor3d/pantallas/visor_modelo_screen.dart';
+import 'package:provider/provider.dart';
+import 'package:braille_text/braille_text.dart';
+import 'package:lumina/features/generacion3d/servicios/local_generator_service.dart';
 import 'package:lumina/features/generacion3d/servicios/prompt_builder_service.dart';
 import 'package:lumina/features/medicion/modelos/measurement_models.dart';
+import 'package:lumina/features/orthosnap/modelos/orthosnap_modelos.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:flutter/services.dart';
 
 /// Pruebas de humo de Lumina.
 ///
 /// Cubren lo que puede romperse sin dispositivo físico: el tema, la
 /// persistencia de accesibilidad, el árbol de decisión del formulario y el
-/// cálculo de medidas. La medición AR, la detección de manos y Meshy necesitan
-/// hardware o red, así que se validan a mano (ver README).
+/// cálculo de medidas. La detección de manos y Meshy necesitan hardware o red,
+/// así que se validan a mano (ver README).
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
+    _mockPathProvider();
+  });
+
+  group('BrailleScreen', () {
+    testWidgets('la etiqueta se puede crear y abre el visor', (tester) async {
+      // Es el flujo que se reportó como roto: al elegir el perfil visual, la
+      // pantalla de Braille debe dejar crear la pieza imprimible.
+      final form = FormularioProvider()
+        ..selectProfile(NeedProfile.visual)
+        ..answer('v_braille')
+        ..setBrailleText('Leche');
+      final generation = GenerationProvider();
+      final a11y = AccessibilityProvider();
+
+      // Pantalla alta: la pantalla de Braille es una lista larga y así se
+      // evita depender del desplazamiento para llegar al botón.
+      tester.view.physicalSize = const Size(1200, 4000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<FormularioProvider>.value(value: form),
+            ChangeNotifierProvider<GenerationProvider>.value(value: generation),
+            ChangeNotifierProvider<AccessibilityProvider>.value(value: a11y),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.light(accessibility: a11y.themeExtension),
+            home: const BrailleScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // La vista previa del Braille se dibuja con el texto ya normalizado.
+      expect(find.byType(BrailleText), findsOneWidget);
+
+      final createButton = find.text('Crear la etiqueta para imprimir');
+      expect(createButton, findsOneWidget);
+      // `runAsync` es necesario porque la generación local escribe ficheros de
+      // verdad y el resto del test corre con temporizadores simulados.
+      await tester.runAsync(() async {
+        await tester.tap(createButton);
+        for (var i = 0; i < 100; i++) {
+          if (generation.phase == GenerationPhase.succeeded) break;
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+          await tester.pump();
+        }
+      });
+      // El visor monta un WebView que nunca queda "quieto", así que no se usa
+      // `pumpAndSettle`: basta con dejar pasar unos fotogramas.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Se generó una pieza local real y el visor la muestra.
+      expect(generation.phase, GenerationPhase.succeeded);
+      expect(generation.model!.isLocal, isTrue);
+      expect(File(generation.model!.stlPath!).existsSync(), isTrue);
+      expect(find.byType(VisorModeloScreen), findsOneWidget);
+      generation.dispose();
+    });
   });
 
   group('AccessibilityProvider', () {
     test('arranca con todos los modos apagados', () {
       final provider = AccessibilityProvider();
-      expect(provider.talkBackEnabled, isFalse);
       expect(provider.bigButtonsEnabled, isFalse);
       expect(provider.activeModeCount, 0);
       expect(provider.themeExtension.fontFamilyOverride, isNull);
@@ -241,34 +313,141 @@ void main() {
     });
   });
 
+  group('LocalGeneratorService', () {
+    // La generación local es la vía gratuita: construye geometría real y la
+    // exporta a STL. Estas pruebas comprueban el contenido binario, no solo
+    // que el método devuelva algo.
+    test('la placa Braille produce un STL binario válido', () {
+      final mesh = const LocalGeneratorService().braillePlate('lumina');
+      expect(mesh.triangleCount, greaterThan(100));
+      expect(mesh.stl.length, 84 + mesh.triangleCount * 50);
+
+      // Cabecera del formato: contador de triángulos en little endian.
+      final view = ByteData.sublistView(mesh.stl);
+      expect(view.getUint32(80, Endian.little), mesh.triangleCount);
+    });
+
+    test('el STL usa el texto normalizado y crece con la etiqueta', () {
+      const service = LocalGeneratorService();
+      final short = service.braillePlate('pan');
+      final long = service.braillePlate('pan integral de centeno');
+      // Más texto ocupa más celdas y, por tanto, más puntos en relieve.
+      expect(long.triangleCount, greaterThan(short.triangleCount));
+
+      // La normalización quita tildes: "café" y "cafe" deben dar lo mismo.
+      expect(
+        service.braillePlate('café').triangleCount,
+        service.braillePlate('cafe').triangleCount,
+      );
+    });
+
+    test('el GLB generado es un contenedor glTF 2.0 bien formado', () {
+      final mesh = const LocalGeneratorService().braillePlate('lumina');
+      final view = ByteData.sublistView(mesh.glb);
+
+      expect(view.getUint32(0, Endian.little), 0x46546C67); // "glTF"
+      expect(view.getUint32(4, Endian.little), 2);
+      expect(view.getUint32(8, Endian.little), mesh.glb.length);
+
+      final jsonLength = view.getUint32(12, Endian.little);
+      expect(view.getUint32(16, Endian.little), 0x4E4F534A); // "JSON"
+      final jsonText = utf8.decode(mesh.glb.sublist(20, 20 + jsonLength));
+      expect(jsonText, contains('"version":"2.0"'));
+
+      final binHeader = 20 + jsonLength;
+      expect(view.getUint32(binHeader + 4, Endian.little), 0x004E4942);
+    });
+
+    test('el engrosador respeta el diámetro medido más la holgura', () {
+      final mesh = const LocalGeneratorService().gripSleeve(
+        measurements: <Measurement>[_measurement('Diámetro del objeto', 4.0)],
+      );
+      // 4 cm de objeto + 0,4 mm de holgura a cada lado del agujero.
+      expect(mesh.dimensionsMm['diámetro del agujero'], closeTo(40.8, 0.01));
+      expect(mesh.kind, LocalPieceKind.gripSleeve);
+    });
+
+    test('la férula usa el perímetro medido y avisa de la ventilación', () {
+      final mesh = const LocalGeneratorService().splint(
+        OrthoSnapRequest(
+          measurements: <Measurement>[
+            _measurement('Perímetro de muñeca', 17.0),
+          ],
+        ),
+      );
+      expect(mesh.dimensionsMm['perímetro'], closeTo(170.0, 0.01));
+      expect(mesh.kind, LocalPieceKind.splint);
+      expect(
+        mesh.notes.any((n) => n.contains('transpirable')),
+        isTrue,
+      );
+    });
+
+    test('sin medidas avisa de que ha usado valores estándar', () {
+      final mesh = const LocalGeneratorService().gripSleeve(
+        measurements: const <Measurement>[],
+      );
+      expect(
+        mesh.notes.any((n) => n.contains('No se tomó el diámetro')),
+        isTrue,
+      );
+    });
+  });
+
   group('GenerationProvider', () {
-    // Estas pruebas ejercitan el modo de demostración, que es el que se usa
-    // cuando no hay clave de Meshy. No tocan la red: comprueban que el flujo
-    // completo (fases, modelo, historial) funciona y que el prompt que se
-    // enviaría incluye la etiqueta Braille.
-    test('sin clave propia entra en modo de demostración', () {
+    test('sin clave propia genera en el dispositivo, sin red', () {
       final provider = GenerationProvider();
-      expect(provider.isDemoMode, isTrue);
+      expect(provider.isLocalMode, isTrue);
+      expect(provider.isMeshyMode, isFalse);
       expect(provider.hasModel, isFalse);
     });
 
-    test('la generación de demostración termina con un modelo local', () async {
+    test('la generación local termina con una pieza STL utilizable', () async {
       final provider = GenerationProvider();
       final form = FormularioProvider()
         ..selectProfile(NeedProfile.motriz)
         ..answer('m_tool')
         ..answer('m_tool_screwdriver');
-      expect(form.recommendation, isNotNull);
 
       await provider.generateFromFormulario(form);
 
       expect(provider.phase, GenerationPhase.succeeded);
       expect(provider.hasModel, isTrue);
-      expect(provider.model!.isLocalAsset, isTrue);
-      expect(provider.model!.isDemo, isTrue);
-      // El modelo de demostración apunta al asset declarado en pubspec.
-      expect(provider.model!.assetPath, GenerationProvider.demoAssetPath);
+      expect(provider.model!.isLocal, isTrue);
+      expect(provider.model!.stlPath, isNotNull);
+      expect(provider.model!.stlPath, endsWith('.stl'));
+      expect(provider.model!.pieceSummary, isNotEmpty);
       expect(provider.history, hasLength(1));
+      provider.dispose();
+    });
+
+    test('el perfil visual genera una etiqueta Braille imprimible', () async {
+      // Es el caso que el usuario reportó: al elegir el perfil visual, la app
+      // debe dejar crear la etiqueta. Se recorre la rama real del formulario.
+      final form = FormularioProvider()..selectProfile(NeedProfile.visual);
+      form.answer('v_braille');
+      expect(form.recommendation?.id, 'braille_label');
+      expect(form.brailleLabel, isNotEmpty);
+
+      final provider = GenerationProvider();
+      await provider.generateFromFormulario(form);
+
+      expect(provider.phase, GenerationPhase.succeeded);
+      expect(provider.model!.isLocal, isTrue);
+      // El STL se escribe en disco y tiene contenido real.
+      final stl = File(provider.model!.stlPath!);
+      expect(stl.existsSync(), isTrue);
+      expect(stl.lengthSync(), greaterThan(1000));
+      provider.dispose();
+    });
+
+    test('la etiqueta Braille se genera sola, sin medidas', () async {
+      final provider = GenerationProvider();
+      await provider.generateBrailleLabel('medicinas');
+
+      expect(provider.phase, GenerationPhase.succeeded);
+      expect(provider.model!.title, 'Etiqueta Braille');
+      expect(provider.model!.pieceSummary, contains('medicinas'));
       provider.dispose();
     });
 
@@ -326,6 +505,31 @@ Measurement _measurement(String label, double valueCm) => Measurement(
       source: MeasurementSource.manual,
       timestamp: DateTime(2026, 1, 1),
     );
+
+/// Simula `path_provider` para las pruebas.
+///
+/// Las piezas locales se escriben en el directorio de documentos de la app, y
+/// ese plugin no tiene implementación en el entorno de pruebas: sin este doble,
+/// cualquier test que genere una pieza fallaría con `MissingPluginException` en
+/// lugar de comprobar la geometría. Se apunta a una carpeta temporal real, así
+/// que los archivos se escriben de verdad y se pueden leer.
+void _mockPathProvider() {
+  final directory = Directory.systemTemp.createTempSync('lumina_test_');
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(
+    const MethodChannel('plugins.flutter.io/path_provider'),
+    (call) async {
+      switch (call.method) {
+        case 'getApplicationDocumentsDirectory':
+        case 'getTemporaryDirectory':
+        case 'getApplicationSupportDirectory':
+          return directory.path;
+        default:
+          return null;
+      }
+    },
+  );
+}
 
 /// Mano abierta sintética: los 21 puntos repartidos de forma realista.
 List<HandPoint> _openHand() => const <HandPoint>[

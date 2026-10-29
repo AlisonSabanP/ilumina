@@ -10,7 +10,7 @@ import '../../accesibilidad/widgets/accessibility_fab.dart';
 /// Entrada manual de una medida.
 ///
 /// Es la red de seguridad de todo el módulo de medición: si el dispositivo no
-/// tiene AR, si el usuario prefiere una regla o si un profesional quiere
+/// no hay cámara disponible, si el usuario prefiere una regla o si un
 /// introducir una medida clínica, este formulario siempre está disponible.
 class ManualMeasurementScreen extends StatefulWidget {
   const ManualMeasurementScreen({
@@ -124,7 +124,7 @@ class _ManualMeasurementScreenState extends State<ManualMeasurementScreen> {
           const LuminaPageHeader(
             title: 'Medida a mano',
             subtitle:
-                'Escribe la medida con una regla. Es la forma más fiable si no hay AR disponible.',
+                'Escribe la medida con una regla. Es la forma más fiable si no puedes usar la cámara.',
             icon: Icons.straighten,
           ),
 

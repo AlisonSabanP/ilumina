@@ -14,8 +14,8 @@ import '../servicios/model_download_service.dart';
 
 /// Visor 3D del modelo generado.
 ///
-/// Carga el `.glb` con `Power3D`: `fromNetwork` para los modelos de Meshy y
-/// `fromAsset` para la pieza de demostración incluida en la app. El
+/// Carga el `.glb` con `Power3D`: `fromFile` para las piezas generadas en el
+/// dispositivo y `fromNetwork` para los modelos de Meshy. El
 /// [Power3DController] expone el control fino:
 ///
 ///  * `updateRotation`  -> activar/desactivar la rotación automática.
@@ -47,16 +47,25 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
   String? _statusMessage;
   String? _localPath;
 
-  /// `true` si el modelo es la pieza de demostración incluida en la app.
-  bool get _isDemo => widget.model.isLocalAsset;
-
-  /// Se usa la URL local si el modelo ya está descargado: así el visor
-  /// funciona sin conexión. Si no, la URL remota de Meshy.
-  String get _modelUrl {
-    final local = _localPath;
-    if (local != null && File(local).existsSync()) {
-      return Uri.file(local).toString();
+  /// Ruta local del `.glb` si ya está en el dispositivo.
+  ///
+  /// Es el caso de las piezas construidas por Lumina: el archivo ya existe
+  /// cuando se abre el visor, así que se carga desde disco con
+  /// `Power3D.fromFile` y no hace falta ninguna descarga.
+  String? get _localGlbPath {
+    for (final candidate in <String?>[_localPath, widget.model.localPath]) {
+      if (candidate != null && candidate.isNotEmpty && File(candidate).existsSync()) {
+        return candidate;
+      }
     }
+    return null;
+  }
+
+  /// Se usa el archivo local si existe: así el visor funciona sin conexión.
+  /// Si no, la URL remota de Meshy.
+  String get _modelUrl {
+    final local = _localGlbPath;
+    if (local != null) return Uri.file(local).toString();
     return widget.model.glbUrl;
   }
 
@@ -90,6 +99,15 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
   }
 
   Future<void> _checkExistingDownload() async {
+    // Las piezas locales ya están en disco: no hay nada que buscar.
+    if (widget.model.isLocal) {
+      if (mounted && widget.model.stlPath != null) {
+        setState(() {
+          _statusMessage = 'Archivo STL listo para imprimir.';
+        });
+      }
+      return;
+    }
     final path = await _downloader.existingPath(
       widget.model.id,
       title: widget.model.title,
@@ -125,31 +143,30 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
     );
   }
 
-  /// Descarga el `.glb` a almacenamiento local.
+  /// Guarda el archivo STL en el dispositivo, listo para laminar.
+  ///
+  /// El STL es el formato que abre cualquier laminador (Cura, PrusaSlicer,
+  /// Bambu Studio) sin conversiones, así que es lo que Lumina entrega para
+  /// imprimir. Las piezas construidas en el dispositivo ya lo tienen en disco;
+  /// las de Meshy se descargan desde su URL.
   Future<void> _download() async {
     setState(() {
       _busy = true;
-      _statusMessage = 'Descargando el modelo...';
+      _statusMessage = 'Preparando el archivo STL...';
     });
     try {
-      final path = _isDemo
-          ? await _downloader.exportAsset(
-              assetPath: widget.model.assetPath!,
-              id: widget.model.id,
-              title: widget.model.title,
-            )
-          : await _downloader.download(
-              id: widget.model.id,
-              url: widget.model.glbUrl,
-              title: widget.model.title,
-            );
+      final path = await _ensureStl();
       if (!mounted) return;
       setState(() {
         _localPath = path;
-        _statusMessage = 'Modelo guardado en el dispositivo.';
+        _statusMessage = 'Archivo STL guardado en el dispositivo.';
       });
-      context.read<GenerationProvider>().markDownloaded(widget.model.id, path);
-      _announce('Modelo descargado');
+      context.read<GenerationProvider>().markDownloaded(
+            widget.model.id,
+            widget.model.localPath ?? path,
+            stlPath: path,
+          );
+      _announce('Archivo STL guardado');
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -160,29 +177,22 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
     }
   }
 
-  /// Descarga (si hace falta) y comparte el archivo.
+  /// Descarga (si hace falta) y comparte el archivo STL.
   Future<void> _share() async {
     setState(() {
       _busy = true;
       _statusMessage = 'Preparando el archivo para compartir...';
     });
     try {
-      final path = _localPath ??
-          (_isDemo
-              ? await _downloader.exportAsset(
-                  assetPath: widget.model.assetPath!,
-                  id: widget.model.id,
-                  title: widget.model.title,
-                )
-              : await _downloader.download(
-                  id: widget.model.id,
-                  url: widget.model.glbUrl,
-                  title: widget.model.title,
-                ));
+      final path = await _ensureStl();
       if (!mounted) return;
       setState(() => _localPath = path);
-      context.read<GenerationProvider>().markDownloaded(widget.model.id, path);
-      await _downloader.shareFile(path, title: widget.model.title);
+      context.read<GenerationProvider>().markDownloaded(
+            widget.model.id,
+            widget.model.localPath ?? path,
+            stlPath: path,
+          );
+      await _downloader.shareStlFile(path, title: widget.model.title);
       if (!mounted) return;
       setState(() => _statusMessage = 'Archivo listo para compartir.');
     } catch (error) {
@@ -195,6 +205,28 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
     }
   }
 
+  /// Devuelve la ruta del STL, obteniéndolo por la vía que corresponda.
+  Future<String> _ensureStl() async {
+    // Pieza construida en el dispositivo: el STL ya está escrito.
+    final existingStl = widget.model.stlPath;
+    if (existingStl != null && File(existingStl).existsSync()) {
+      return existingStl;
+    }
+    // Pieza de Meshy: se descarga el STL si lo hay; si no, el GLB.
+    if (widget.model.stlUrl != null && widget.model.stlUrl!.isNotEmpty) {
+      return _downloader.downloadStl(
+        id: widget.model.id,
+        url: widget.model.stlUrl!,
+        title: widget.model.title,
+      );
+    }
+    return _downloader.download(
+      id: widget.model.id,
+      url: widget.model.glbUrl,
+      title: widget.model.title,
+    );
+  }
+
   void _announce(String message) {
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
@@ -202,6 +234,49 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
       SnackBar(
         content: Text(message),
         duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  /// Construye el visor con la fuente que corresponda.
+  ///
+  /// Dos caminos:
+  ///  * `fromFile`:    una pieza ya escrita en el disco del dispositivo.
+  ///  * `fromNetwork`: un modelo de Meshy que aún hay que descargar.
+  ///
+  /// Se prefiere siempre la fuente local: el visor funciona sin conexión y sin
+  /// esperas cuando el archivo ya está en el móvil.
+  Widget _buildViewer() {
+    final localPath = _localGlbPath;
+    if (localPath != null) {
+      return Power3D.fromFile(
+        localPath,
+        controller: _controller,
+        loadingUi: (context, controller) => const LuminaLoadingView(
+          message: 'Cargando tu pieza...',
+        ),
+        errorWidget: LuminaErrorView(
+          title: 'No se pudo mostrar la pieza',
+          message: 'El archivo del dispositivo no se pudo leer.',
+          onRetry: _configureController,
+          retryLabel: 'Reintentar',
+        ),
+      );
+    }
+
+    return Power3D.fromNetwork(
+      _modelUrl,
+      controller: _controller,
+      loadingUi: (context, controller) => const LuminaLoadingView(
+        message: 'Cargando el modelo 3D...',
+      ),
+      errorWidget: LuminaErrorView(
+        title: 'No se pudo mostrar el modelo',
+        message:
+            'Comprueba tu conexión. Si el modelo lleva más de tres días '
+            'en Meshy, puede haber caducado: vuelve a generarlo.',
+        onRetry: _configureController,
+        retryLabel: 'Reintentar',
       ),
     );
   }
@@ -228,38 +303,7 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
                     label:
                         'Visor 3D del modelo ${widget.model.title}. Arrastra para rotar y pellizca para acercar.',
                     container: true,
-                    child: _isDemo
-                        ? Power3D.fromAsset(
-                            widget.model.assetPath!,
-                            controller: _controller,
-                            loadingUi: (context, controller) =>
-                                const LuminaLoadingView(
-                              message: 'Cargando la pieza de ejemplo...',
-                            ),
-                            errorWidget: LuminaErrorView(
-                              title: 'No se pudo mostrar la pieza de ejemplo',
-                              message:
-                                  'La pieza incluida en la app no se pudo cargar.',
-                              onRetry: _configureController,
-                              retryLabel: 'Reintentar',
-                            ),
-                          )
-                        : Power3D.fromNetwork(
-                            _modelUrl,
-                            controller: _controller,
-                            loadingUi: (context, controller) =>
-                                const LuminaLoadingView(
-                              message: 'Cargando el modelo 3D...',
-                            ),
-                            errorWidget: LuminaErrorView(
-                              title: 'No se pudo mostrar el modelo',
-                              message:
-                                  'Comprueba tu conexión. Si el modelo lleva más de tres días '
-                                  'en Meshy, puede haber caducado: vuelve a generarlo.',
-                              onRetry: _configureController,
-                              retryLabel: 'Reintentar',
-                            ),
-                          ),
+                    child: _buildViewer(),
                   ),
                 ),
                 // Indicador de estado superpuesto.
@@ -348,17 +392,17 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
                   const SizedBox(height: AppSpacing.md),
                   AccessibleButton(
                     label: _localPath == null
-                        ? 'Descargar .glb'
-                        : 'Descargar otra vez',
+                        ? 'Descargar STL'
+                        : 'Descargar STL otra vez',
                     icon: Icons.download,
                     pictogram: Icons.download,
                     busy: _busy,
                     onPressed: _busy ? null : _download,
-                    hint: 'Guarda el archivo del modelo en el dispositivo',
+                    hint: 'Guarda el archivo STL, listo para el laminador',
                   ),
                   SizedBox(height: a11y.controlGap),
                   AccessibleButton(
-                    label: 'Compartir modelo',
+                    label: 'Compartir STL',
                     icon: Icons.share,
                     pictogram: Icons.share,
                     isPrimary: false,

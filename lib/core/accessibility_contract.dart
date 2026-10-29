@@ -2,9 +2,12 @@
 ///
 /// `accessibility_widget` gestiona las preferencias visuales/lectura
 /// (dislexia, contraste, saturación, guía de lectura...). Lumina añade encima
-/// los modos propios de la app: TalkBack, botones grandes y pictogramas.
+/// los modos propios de la app: botones grandes y pictogramas.
+///
+/// TalkBack/VoiceOver **no aparece aquí a propósito**: es un lector de pantalla
+/// del sistema y solo se activa desde los ajustes del dispositivo. Lo que
+/// Lumina garantiza es que sus widgets estén bien etiquetados con `Semantics`.
 abstract interface class AccessibilityModes {
-  bool get talkBackEnabled;
   bool get bigButtonsEnabled;
   bool get pictogramsEnabled;
 
@@ -17,7 +20,6 @@ abstract interface class AccessibilityModes {
   /// Cualquier ajuste que exija espaciados/áreas táctiles ampliadas.
   bool get needsLargeTouchTargets;
 
-  void setTalkBack(bool value);
   void setBigButtons(bool value);
   void setPictograms(bool value);
   void setDyslexiaFont(bool value);
@@ -42,7 +44,6 @@ abstract final class AccessibilityMetrics {
 /// Constantes de los modos aplicados con `Semantics`.
 abstract final class SemanticsLabels {
   static const String bigButtons = 'Modo botones grandes';
-  static const String talkBack = 'Modo TalkBack';
   static const String pictograms = 'Modo pictogramas';
   static const String dyslexia = 'Modo dislexia';
   static const String highContrast = 'Alto contraste';

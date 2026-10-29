@@ -8,25 +8,31 @@ import '../../../core/app_spacing.dart';
 import '../../../shared/servicios/braille_service.dart';
 import '../../../shared/widgets/lumina_widgets.dart';
 import '../../accesibilidad/providers/accessibility_provider.dart';
-import '../modelos/formulario_provider.dart';
 import '../../accesibilidad/widgets/accessibility_fab.dart';
+import '../../generacion3d/pantallas/generacion_screen.dart';
+import '../../generacion3d/providers/generation_provider.dart';
+import '../../generacion3d/servicios/local_generator_service.dart';
+import '../../visor3d/pantallas/visor_modelo_screen.dart';
+import '../modelos/formulario_provider.dart';
 
 /// Generador de etiquetas en Braille.
+///
+/// Es la pantalla clave del perfil visual: quien no ve el objeto necesita una
+/// etiqueta que pueda leer con el dedo, y aquí se escribe, se ve en Braille y se
+/// convierte en una pieza imprimible de verdad.
 ///
 /// Usa el paquete `braille_text`:
 ///  * [BrailleText] dibuja el Braille y, al deslizar el dedo por encima, emite
 ///    una vibración corta por cada carácter, de modo que el usuario puede
-///    "leer" la etiqueta con el dedo antes de imprimirla.
+///    "leer" la etiqueta antes de imprimirla.
 ///  * [BrailleService] normaliza antes el texto (quita tildes y mayúsculas) y
 ///    lo recorta, porque el conversor del paquete convierte a espacio todo lo
 ///    que no esté en su tabla.
 ///
-/// El texto que se ve aquí es el mismo que se graba en relieve en la pieza: se
-/// añade al prompt de generación, así que la etiqueta nace ya integrada en el
-/// objeto y no hay que imprimirla aparte.
-///
-/// El tamaño de la fuente es ajustable porque el Braille en pantalla debe
-/// poder leerse con el dedo: a mayor tamaño, más separación entre puntos.
+/// La vista previa se dibuja siempre con el texto ya normalizado, y si no queda
+/// nada que mostrar se avisa en lugar de dejar el hueco en blanco: el error
+/// original era pasar a [BrailleText] un texto que la normalización había
+/// vaciado, con lo que parecía que la etiqueta "no funcionaba".
 class BrailleScreen extends StatefulWidget {
   const BrailleScreen({super.key});
 
@@ -42,10 +48,10 @@ class _BrailleScreenState extends State<BrailleScreen> {
   final TextEditingController _controller = TextEditingController();
 
   /// Tamaño de fuente del Braille, en puntos lógicos.
-  double _textSize = 40;
+  double _textSize = 48;
 
-  static const double _minSize = 16;
-  static const double _maxSize = 96;
+  static const double _minSize = 24;
+  static const double _maxSize = 120;
 
   @override
   void initState() {
@@ -72,7 +78,14 @@ class _BrailleScreenState extends State<BrailleScreen> {
   /// Texto normalizado (sin tildes) y recortado, tal y como se imprimirá.
   String get _labelText => BrailleService.prepareLabel(_controller.text);
 
-  String get _brailleOutput => BrailleService.toBraille(_controller.text);
+  /// `true` cuando hay algo que se puede imprimir de verdad.
+  ///
+  /// Un texto compuesto solo de signos no representables se normaliza a cadena
+  /// vacía: en ese caso no hay etiqueta que generar.
+  bool get _hasPrintableLabel => _labelText.isNotEmpty;
+
+  String get _brailleOutput =>
+      _hasPrintableLabel ? BrailleService.toBraille(_controller.text) : '';
 
   Future<void> _copy() async {
     await Clipboard.setData(ClipboardData(text: _brailleOutput));
@@ -83,28 +96,58 @@ class _BrailleScreenState extends State<BrailleScreen> {
   }
 
   Future<void> _share() async {
-    final text = _controller.text.trim();
-    if (text.isEmpty) return;
+    if (!_hasPrintableLabel) return;
     await SharePlus.instance.share(
       ShareParams(
         text: 'Etiqueta Lumina\n\n'
-            'Texto: $text\n'
+            'Texto: $_labelText\n'
             'Braille: $_brailleOutput\n\n'
-            'Lumina la graba en relieve en la pieza (punto de 1,5 mm).',
+            'Lumina la graba en relieve en la pieza '
+            '(${LocalGeneratorService.brailleDotHeight} mm de altura de punto).',
         subject: 'Etiqueta en Braille generada con Lumina',
       ),
     );
+  }
+
+  /// Crea la etiqueta como pieza imprimible y abre el visor.
+  ///
+  /// Este es el paso que faltaba: antes solo se podía ver y copiar el Braille,
+  /// pero el usuario no tenía forma de obtener el objeto. Ahora se construye el
+  /// STL con los puntos en relieve y se muestra igual que cualquier otra pieza.
+  Future<void> _createPiece() async {
+    final generation = context.read<GenerationProvider>();
+    final navigator = Navigator.of(context);
+
+    await generation.generateBrailleLabel(
+      _labelText,
+      title: 'Etiqueta Braille · $_labelText',
+    );
+
+    if (!mounted) return;
+    final model = generation.model;
+    if (model == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            generation.error?.message ??
+                'No se pudo crear la etiqueta. Inténtalo otra vez.',
+          ),
+        ),
+      );
+      return;
+    }
+    navigator.push(VisorModeloScreen.route(model));
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final a11y = AccessibilityProvider.of(context);
-    final text = _controller.text;
-    final hasText = text.trim().isNotEmpty;
+    final hasText = _controller.text.trim().isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Etiqueta en Braille')),
+      floatingActionButton: const AccessibilityFab(heroTag: 'braille.a11y'),
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.lg),
         children: [
@@ -116,14 +159,14 @@ class _BrailleScreenState extends State<BrailleScreen> {
           ),
           LuminaInfoBanner(
             message: hasText
-                ? 'Esta etiqueta se graba en relieve en la pieza. Desliza el dedo por la vista previa para notar cada carácter.'
+                ? 'Esta etiqueta se imprime en relieve. Desliza el dedo por la vista previa para notar cada carácter.'
                 : 'Escribe algo para generar la etiqueta.',
             icon: hasText ? Icons.vibration : Icons.edit_note,
           ),
           const SizedBox(height: AppSpacing.lg),
           TextField(
             controller: _controller,
-            maxLength: 40,
+            maxLength: BrailleService.maxLabelLength,
             maxLines: 3,
             minLines: 2,
             textCapitalization: TextCapitalization.sentences,
@@ -131,7 +174,7 @@ class _BrailleScreenState extends State<BrailleScreen> {
               labelText: 'Texto de la etiqueta',
               helperText:
                   'Se admiten letras, números y signos básicos. Las tildes y las '
-                  'mayúsculas se simplifican. Máximo 40 caracteres.',
+                  'mayúsculas se simplifican.',
               prefixIcon: Icon(Icons.text_fields),
             ),
           ),
@@ -145,13 +188,15 @@ class _BrailleScreenState extends State<BrailleScreen> {
               slider: true,
               label: 'Tamaño del Braille',
               value: '${_textSize.round()} puntos',
-              child: Slider(
-                value: _textSize,
-                min: _minSize,
-                max: _maxSize,
-                divisions: ((_maxSize - _minSize) / 4).round(),
-                label: '${_textSize.round()} pt',
-                onChanged: (value) => setState(() => _textSize = value),
+              child: ExcludeSemantics(
+                child: Slider(
+                  value: _textSize,
+                  min: _minSize,
+                  max: _maxSize,
+                  divisions: ((_maxSize - _minSize) / 8).round(),
+                  label: '${_textSize.round()} pt',
+                  onChanged: (value) => setState(() => _textSize = value),
+                ),
               ),
             ),
           ),
@@ -160,10 +205,10 @@ class _BrailleScreenState extends State<BrailleScreen> {
             title: 'Vista previa',
             subtitle: 'Braille Unicode generado a partir del texto.',
             leadingIcon: Icons.visibility,
-            child: hasText
+            child: _hasPrintableLabel
                 ? Semantics(
                     label:
-                        'Vista previa en Braille de: $text. Desliza el dedo por encima para notar la vibración.',
+                        'Vista previa en Braille de: $_labelText. Desliza el dedo por encima para notar la vibración.',
                     excludeSemantics: true,
                     child: DecoratedBox(
                       decoration: BoxDecoration(
@@ -172,9 +217,12 @@ class _BrailleScreenState extends State<BrailleScreen> {
                       ),
                       child: SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
-                        child: BrailleText(
-                          text: _labelText,
-                          textSize: _textSize,
+                        child: Padding(
+                          padding: const EdgeInsets.all(AppSpacing.lg),
+                          child: BrailleText(
+                            text: _labelText,
+                            textSize: _textSize,
+                          ),
                         ),
                       ),
                     ),
@@ -182,7 +230,10 @@ class _BrailleScreenState extends State<BrailleScreen> {
                 : Padding(
                     padding: const EdgeInsets.all(AppSpacing.xl),
                     child: Text(
-                      'Aún no hay texto.',
+                      hasText
+                          ? 'Ese texto no se puede convertir: prueba con letras y '
+                              'números.'
+                          : 'Aún no hay texto.',
                       style: theme.textTheme.bodyMedium,
                     ),
                   ),
@@ -190,21 +241,30 @@ class _BrailleScreenState extends State<BrailleScreen> {
           const SizedBox(height: AppSpacing.lg),
           LuminaSectionCard(
             title: 'Texto Braille (seleccionable)',
-            subtitle:
-                'Cópialo o compártelo si quieres grabarlo por tu cuenta.',
+            subtitle: 'Cópialo o compártelo si quieres grabarlo por tu cuenta.',
             leadingIcon: Icons.code,
             child: SelectableText(
-              hasText ? _brailleOutput : '—',
+              _hasPrintableLabel ? _brailleOutput : '—',
               style: theme.textTheme.headlineSmall,
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
+
+          // --- Acción principal: crear la pieza imprimible ---
+          AccessibleButton(
+            label: 'Crear la etiqueta para imprimir',
+            icon: Icons.print,
+            pictogram: Icons.print,
+            onPressed: _hasPrintableLabel ? _createPiece : null,
+            hint: 'Genera el archivo STL de la etiqueta y lo abre en el visor',
+          ),
+          SizedBox(height: a11y.controlGap),
           AccessibleButton(
             label: 'Copiar Braille',
             icon: Icons.copy,
             pictogram: Icons.copy,
             isPrimary: false,
-            onPressed: hasText ? _copy : null,
+            onPressed: _hasPrintableLabel ? _copy : null,
             hint: 'Copia los caracteres Braille al portapapeles',
           ),
           SizedBox(height: a11y.controlGap),
@@ -212,15 +272,28 @@ class _BrailleScreenState extends State<BrailleScreen> {
             label: 'Compartir etiqueta',
             icon: Icons.share,
             pictogram: Icons.share,
-            onPressed: hasText ? _share : null,
+            isPrimary: false,
+            onPressed: _hasPrintableLabel ? _share : null,
             hint: 'Comparte el texto y su Braille con otra aplicación',
+          ),
+          SizedBox(height: a11y.controlGap),
+          AccessibleButton(
+            label: 'Ver todas las piezas',
+            icon: Icons.threed_rotation,
+            pictogram: Icons.threed_rotation,
+            isPrimary: false,
+            onPressed: () =>
+                Navigator.of(context).push(GeneracionScreen.route()),
+            hint: 'Abre la pantalla de generación de piezas',
           ),
           const SizedBox(height: AppSpacing.xl),
           LuminaInfoBanner(
             message:
-                'Al generar el modelo, la etiqueta se pide con relieve de 1,5 mm '
-                'de altura y 2,5 mm entre puntos, que son las medidas que la '
-                'hacen legible con el dedo.',
+                'La etiqueta se imprime con puntos de '
+                '${LocalGeneratorService.brailleDotDiameter} mm de diámetro y '
+                '${LocalGeneratorService.brailleDotHeight} mm de altura, con la '
+                'separación estándar de ${LocalGeneratorService.brailleDotSpacing} mm, '
+                'que son las medidas que la hacen legible con el dedo.',
             icon: Icons.print,
           ),
           const SizedBox(height: AppSpacing.xxl),

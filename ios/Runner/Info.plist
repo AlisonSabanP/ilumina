@@ -56,15 +56,17 @@
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Lumina usa la cámara para medir tu mano con 21 puntos y calcular las medidas de la pieza que vas a imprimir. Las imágenes no se guardan ni se envían a ningún servidor.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Lumina guarda en tu galería la captura del modelo 3D cuando tú lo pides.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Lumina necesita acceso a tu galería solo para guardar las imágenes que tú decidas.</string>
 </dict>
 </plist>

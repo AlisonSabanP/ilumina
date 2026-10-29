@@ -2,9 +2,6 @@ allprojects {
     repositories {
         google()
         mavenCentral()
-        // Sceneform (dependencia de `arcore_flutter_plugin`) solo se publica en
-        // el repositorio Maven de Google, no en Maven Central.
-        maven { url = uri("https://dl.google.com/dl/android/maven2") }
     }
 }
 

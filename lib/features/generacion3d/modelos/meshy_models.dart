@@ -214,13 +214,17 @@ class GeneratedModel {
     required this.title,
     required this.prompt,
     required this.glbUrl,
+    this.stlUrl,
     this.localPath,
-    this.assetPath,
+    this.stlPath,
     this.thumbnailUrl,
     this.taskId,
     this.createdAt,
     this.material,
-    this.isDemo = false,
+    this.isLocal = false,
+    this.pieceSummary,
+    this.pieceNotes = const <String>[],
+    this.dimensionsMm = const <String, double>{},
   });
 
   final String id;
@@ -228,44 +232,58 @@ class GeneratedModel {
   final String prompt;
   final String glbUrl;
 
+  /// URL del `.stl` en Meshy, cuando se pidió ese formato.
+  final String? stlUrl;
+
   /// Ruta del `.glb` guardado en el dispositivo, si ya se descargó.
   final String? localPath;
 
-  /// Ruta de un `.glb` empaquetado en la app. Se usa en el modo de
-  /// demostración, que no depende de Meshy ni de la red.
-  final String? assetPath;
+  /// Ruta del `.stl` guardado en el dispositivo, listo para laminar.
+  ///
+  /// Las piezas generadas en el propio móvil se guardan siempre en STL, que es
+  /// lo que abren Cura, PrusaSlicer o Bambu Studio sin conversiones.
+  final String? stlPath;
 
   final String? thumbnailUrl;
   final String? taskId;
   final DateTime? createdAt;
   final String? material;
 
-  /// `true` si el modelo es la pieza de demostración incluida en la app.
-  final bool isDemo;
+  /// `true` si la pieza la ha construido Lumina en el dispositivo, sin red.
+  final bool isLocal;
 
-  bool get isDownloaded => localPath != null;
+  /// Descripción legible de la pieza generada localmente.
+  final String? pieceSummary;
 
-  /// `true` si el modelo se carga desde los assets y no desde la red.
-  bool get isLocalAsset => assetPath != null;
+  /// Avisos de fabricación (medidas por defecto usadas, holguras...).
+  final List<String> pieceNotes;
+
+  /// Caja envolvente de la pieza en milímetros.
+  final Map<String, double> dimensionsMm;
+
+  bool get isDownloaded => localPath != null || stlPath != null;
 
   GeneratedModel copyWith({
     String? localPath,
+    String? stlPath,
     String? title,
-    String? assetPath,
-    bool? isDemo,
   }) =>
       GeneratedModel(
         id: id,
         title: title ?? this.title,
         prompt: prompt,
         glbUrl: glbUrl,
+        stlUrl: stlUrl,
         localPath: localPath ?? this.localPath,
-        assetPath: assetPath ?? this.assetPath,
+        stlPath: stlPath ?? this.stlPath,
         thumbnailUrl: thumbnailUrl,
         taskId: taskId,
         createdAt: createdAt,
         material: material,
-        isDemo: isDemo ?? this.isDemo,
+        isLocal: isLocal,
+        pieceSummary: pieceSummary,
+        pieceNotes: pieceNotes,
+        dimensionsMm: dimensionsMm,
       );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -273,13 +291,17 @@ class GeneratedModel {
         'title': title,
         'prompt': prompt,
         'glbUrl': glbUrl,
+        'stlUrl': stlUrl,
         'localPath': localPath,
-        'assetPath': assetPath,
+        'stlPath': stlPath,
         'thumbnailUrl': thumbnailUrl,
         'taskId': taskId,
         'createdAt': createdAt?.toIso8601String(),
         'material': material,
-        'isDemo': isDemo,
+        'isLocal': isLocal,
+        'pieceSummary': pieceSummary,
+        'pieceNotes': pieceNotes,
+        'dimensionsMm': dimensionsMm,
       };
 
   static GeneratedModel fromJson(Map<String, dynamic> json) => GeneratedModel(
@@ -287,12 +309,23 @@ class GeneratedModel {
         title: json['title'] as String? ?? 'Modelo sin título',
         prompt: json['prompt'] as String? ?? '',
         glbUrl: json['glbUrl'] as String? ?? '',
+        stlUrl: json['stlUrl'] as String?,
         localPath: json['localPath'] as String?,
-        assetPath: json['assetPath'] as String?,
+        stlPath: json['stlPath'] as String?,
         thumbnailUrl: json['thumbnailUrl'] as String?,
         taskId: json['taskId'] as String?,
         createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
         material: json['material'] as String?,
-        isDemo: json['isDemo'] as bool? ?? false,
+        isLocal: json['isLocal'] as bool? ?? false,
+        pieceSummary: json['pieceSummary'] as String?,
+        pieceNotes: (json['pieceNotes'] as List?)?.whereType<String>().toList() ??
+            const <String>[],
+        dimensionsMm: (json['dimensionsMm'] as Map?)?.map(
+              (key, value) => MapEntry(
+                key.toString(),
+                (value as num).toDouble(),
+              ),
+            ) ??
+            const <String, double>{},
       );
 }

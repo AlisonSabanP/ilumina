@@ -6,18 +6,18 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 /// Prioridad de resolución:
 ///   1. `--dart-define=MESHY_API_KEY=...` (recomendado en CI y en release).
 ///   2. Fichero `.env` (recomendado en desarrollo local).
-///   3. [testModeApiKey], que activa el modo de demostración local.
+///   3. [testModeApiKey], el valor centinela que indica "sin clave".
 ///
 /// La clave NUNCA se escribe en el código de la aplicación: solo se lee desde
-/// el entorno de compilación o desde el `.env`, que está en `.gitignore`.
+/// el entorno de compilación o desde el `.env` versionado.
 abstract final class Env {
   /// Valor centinela que indica "no hay clave configurada".
   ///
   /// Meshy **no tiene un modo de prueba**: con cualquier clave que no sea una
   /// cuenta real, la API responde 401. Este valor existe solo para que la app
   /// pueda distinguir "el usuario no ha configurado clave" de "el usuario ha
-  /// configurado una clave", y en ese caso cargar la pieza de demostración
-  /// local en lugar de llamar a la API y fallar.
+  /// configurado una clave", y en ese caso generar la pieza en el propio
+  /// dispositivo en lugar de llamar a la API y fallar.
   static const String testModeApiKey =
       'msy_dummy_api_key_for_test_mode_12345678';
 
@@ -52,8 +52,8 @@ abstract final class Env {
 
   /// `true` cuando no hay una clave propia configurada.
   ///
-  /// En ese caso Lumina trabaja en modo de demostración: genera la pieza a
-  /// partir de un `.glb` local y no llama a Meshy.
+  /// En ese caso Lumina no llama a Meshy: genera la pieza en el propio
+  /// dispositivo con `LocalGeneratorService` (gratis y sin conexión).
   static bool get isMeshyTestMode => meshyApiKey == testModeApiKey;
 
   /// `true` si el desarrollador configuró una clave propia.

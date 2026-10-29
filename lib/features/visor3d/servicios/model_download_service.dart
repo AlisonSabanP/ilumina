@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -89,33 +88,34 @@ class ModelDownloadService {
     }
   }
 
-  /// Copia a disco un `.glb` empaquetado en la app y devuelve su ruta.
+  /// Nombre de archivo STL para una pieza, con extensión `.stl`.
+  static String stlFileNameFor(String id, {String? title}) =>
+      fileNameFor(id, title: title).replaceAll(RegExp(r'\.glb$'), '.stl');
+
+  /// Descarga el `.stl` desde [url] y devuelve la ruta local.
   ///
-  /// Se usa en el modo de demostración: el modelo vive en los assets, pero para
-  /// compartirlo o abrirlo en un laminador hace falta un fichero real en disco.
-  Future<String> exportAsset({
-    required String assetPath,
+  /// Es el formato que se entrega para imprimir: los laminadores lo abren tal
+  /// cual, sin conversiones ni pasos intermedios.
+  Future<String> downloadStl({
     required String id,
+    required String url,
     String? title,
   }) async {
     try {
       final dir = await modelsDirectory();
-      final file = File('${dir.path}/${fileNameFor(id, title: title)}');
+      final file = File('${dir.path}/${stlFileNameFor(id, title: title)}');
       if (await file.exists() && await file.length() > 0) {
         return file.path;
       }
-      final data = await rootBundle.load(assetPath);
-      await file.writeAsBytes(data.buffer.asUint8List(), flush: true);
+      final bytes = await _service.downloadModelBytes(url);
+      await file.writeAsBytes(bytes, flush: true);
       return file.path;
-    } on FlutterError catch (error) {
-      throw MeshyException(
-        message: 'No se pudo preparar la pieza de demostración: ${error.message}',
-        kind: MeshyErrorKind.server,
-      );
+    } on MeshyException {
+      rethrow;
     } on FileSystemException catch (error) {
       throw MeshyException(
         message:
-            'No se pudo guardar el modelo en el dispositivo: ${error.message}',
+            'No se pudo guardar el archivo STL en el dispositivo: ${error.message}',
         kind: MeshyErrorKind.server,
         isRetryable: true,
       );
@@ -138,6 +138,29 @@ class ModelDownloadService {
         subject: title == null ? 'Modelo 3D de Lumina' : '$title — Lumina',
         text: 'Modelo 3D generado con Lumina. Ábrelo en tu laminador '
             '(Cura, PrusaSlicer, Bambu Studio) o en cualquier visor de glTF.',
+      ),
+    );
+  }
+
+  /// Abre la hoja de compartir con el archivo `.stl`.
+  ///
+  /// El texto que acompaña al archivo explica el paso siguiente, porque quien
+  /// recibe un STL necesita saber que se abre en un laminador.
+  Future<ShareResult> shareStlFile(String path, {String? title}) async {
+    final file = File(path);
+    if (!await file.exists()) {
+      throw const MeshyException(
+        message: 'El archivo ya no está en el dispositivo. Descárgalo otra vez.',
+        kind: MeshyErrorKind.server,
+      );
+    }
+
+    return SharePlus.instance.share(
+      ShareParams(
+        files: <XFile>[XFile(path, mimeType: 'model/stl')],
+        subject: title == null ? 'Pieza Lumina para imprimir' : '$title — Lumina',
+        text: 'Pieza lista para imprimir en 3D, generada con Lumina. '
+            'Ábrela en tu laminador (Cura, PrusaSlicer, Bambu Studio).',
       ),
     );
   }

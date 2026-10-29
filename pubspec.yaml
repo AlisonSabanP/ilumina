@@ -38,20 +38,14 @@ dependencies:
   braille_text: ^0.0.1
 
   # --- Visión por computadora / Medición ---
-  # AR milimétrico (ARKit / ARCore) para medir objetos tocando dos puntos.
-  # `neom_ar` unifica ambas plataformas tras su interfaz `ArService`.
-  neom_ar: ^1.0.0
-  # Implementaciones nativas de AR: Lumina construye la vista de cámara con
-  # estos dos plugins (la parte que `neom_ar` deja al consumidor).
-  arkit_plugin: ^1.5.0
-  # `arcore_flutter_plugin` llega de forma transitiva desde `neom_ar`; el fork
-  # local que hace que compile se declara en `dependency_overrides`, más abajo.
-  arcore_flutter_plugin: ^0.1.0
-  # `neom_ar` usa Sint (GetX-like) para su controlador de medición. Se declara
-  # explícitamente porque Lumina importa `Sint` para registrar el controlador.
-  sint: ^1.6.2
   # 21 landmarks 3D de la mano vía MediaPipe. SOLO Android.
+  # (La medición de objetos por AR se retiró: ver la nota en
+  # `lib/features/medicion/modelos/measurement_models.dart`.)
   hand_landmarker: ^3.1.0
+
+  # La generación 3D por defecto no necesita ningún paquete: la hace
+  # `lib/shared/servicios/stl_builder.dart` (STL y GLB propios). Meshy AI se
+  # usa solo si el usuario aporta su clave, a través de `http`.
 
   # --- Visor 3D (Babylon.js sobre WebView) ---
   power3d: ^2.3.0
@@ -61,15 +55,7 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^6.0.0
 
-# `neom_ar` pide `arcore_flutter_plugin: ^0.1.0` de pub.dev, pero esa versión no
-# compila con Gradle 9: su `build.gradle` llama a `jcenter()` (repositorio
-# retirado) y declara un buildscript con AGP 3.5.3 incompatible con el AGP 9 del
-# proyecto. El override apunta al fork local de `third_party/`, que solo cambia
-# la configuración de compilación y actualiza Sceneform 1.13 -> 1.17.1.
-# Es el mecanismo estándar de Pub para sustituciones de dependencias transitivas.
 dependency_overrides:
-  arcore_flutter_plugin:
-    path: third_party/arcore_flutter_plugin
   # `power3d` -> `flutter_inappwebview` -> `flutter_inappwebview_android` 1.1.3,
   # cuya configuración de release usa `proguard-android.txt`; Gradle 9 rechaza
   # ese fichero porque desactiva R8. El fork solo cambia esa línea por
@@ -82,8 +68,9 @@ flutter:
 
   # `.env` se empaqueta como asset porque `flutter_dotenv` lo lee del bundle en
   # el dispositivo (no del sistema de ficheros). El fichero versionado solo
-  # contiene la clave pública de prueba; la clave real se inyecta con
-  # `--dart-define=MESHY_API_KEY=...`, que tiene prioridad. Ver `lib/core/env.dart`.
+  # contiene el valor centinela de Meshy (no es una clave válida); la clave real
+  # se inyecta con `--dart-define=MESHY_API_KEY=...`, que tiene prioridad.
+  # Ver `lib/core/env.dart`.
   assets:
     - assets/images/
     - assets/models/
@@ -97,3 +84,13 @@ flutter:
         - asset: assets/fonts/Andika-Regular.ttf
         - asset: assets/fonts/Andika-Bold.ttf
           weight: 700
+
+    # DejaVu Sans cubre los 256 caracteres del bloque Braille Unicode
+    # (U+2800–U+28FF). Se registra con el nombre de familia `Braille` porque es
+    # el que usa el paquete `braille_text` en su widget `BrailleText`: el
+    # paquete pide esa familia pero no empaqueta ninguna fuente, así que sin
+    # esta declaración el Braille se dibuja como cuadros vacíos.
+    # Licencia Bitstream Vera / DejaVu, de uso libre.
+    - family: Braille
+      fonts:
+        - asset: assets/fonts/BraillePoints.ttf

@@ -2,9 +2,6 @@ import 'dart:math' as math;
 
 /// Origen de una medida.
 enum MeasurementSource {
-  /// Obtenida con AR (ARKit/ARCore) tocando dos puntos del mundo real.
-  ar('AR', 'Medida tomada con la cámara AR'),
-
   /// Obtenida de los 21 landmarks de la mano (MediaPipe).
   hand('Mano', 'Medida calculada a partir de la mano'),
 
@@ -19,7 +16,6 @@ enum MeasurementSource {
 
 /// Qué representa la medida. Determina cómo se usa en el prompt de Meshy.
 enum MeasurementKind {
-  arDistance('Distancia AR'),
   handSpan('Envergadura de la mano'),
   handPalmWidth('Ancho de palma'),
   handGripOpening('Apertura de agarre'),
@@ -36,6 +32,11 @@ enum MeasurementKind {
 }
 
 /// Una medida concreta, con su unidad ya normalizada a centímetros.
+///
+/// Nota: hubo un origen `ar` (medición por ARCore/ARKit) que se retiró porque
+/// la medición AR no funcionaba de forma fiable en dispositivos reales. Los
+/// datos guardados con ese origen se leen como `manual`, que es su equivalente
+/// más cercano, gracias al `orElse` de [Measurement.fromJson].
 class Measurement {
   const Measurement({
     required this.id,
@@ -178,7 +179,7 @@ class HandPoint {
 /// Una distancia medida en píxeles no se puede convertir a centímetros sin una
 /// referencia de tamaño conocido. Lumina resuelve esto con una calibración
 /// explícita: el usuario indica el ancho real de su palma en centímetros
-/// —medido con una regla o con la pantalla de medición AR— y de ahí se obtiene
+/// —medido con una regla o con la cinta métrica— y de ahí se obtiene
 /// el factor `cm/píxel` que se aplica a todas las demás distancias.
 ///
 /// Si el usuario todavía no ha calibrado, se usa [defaultReferencePalmWidthCm]

@@ -1,9 +1,8 @@
 # Lumina — Podfile de iOS.
 #
-# iOS 15 es el mínimo razonable: `arkit_plugin` (ARKit) requiere 13, `power3d`
-# (WebView) 12 y `share_plus` 12. Se sube a 15 para tener el framework
-# `MediaPipe` disponible si algún día se añade la medición de manos en iOS
-# (hoy `hand_landmarker` es solo Android).
+# iOS 15 es el mínimo razonable: `power3d` (WebView) 12 y `share_plus` 12.
+# Se sube a 15 para tener el framework `MediaPipe` disponible si algún día se
+# añade la medición de manos en iOS (hoy `hand_landmarker` es solo Android).
 platform :ios, '15.0'
 
 # El comentario siguiente evita que CocoaPods inyecte el analizador de símbolos

@@ -1,6 +1,3 @@
-import 'dart:io';
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/app_spacing.dart';
@@ -9,7 +6,6 @@ import '../../accesibilidad/providers/accessibility_provider.dart';
 import '../modelos/measurement_models.dart';
 import '../modelos/measurement_target.dart';
 import '../servicios/hand_detector.dart';
-import 'ar_measurement_screen.dart';
 import 'hand_measurement_screen.dart';
 import 'manual_measurement_screen.dart';
 import '../../accesibilidad/widgets/accessibility_fab.dart';
@@ -44,7 +40,6 @@ class MedicionHubScreen extends StatelessWidget {
     final a11y = AccessibilityProvider.of(context);
     final measurements = MeasurementStore.read(context, target);
 
-    final arSupported = _arSupported();
     final handSupported = HandDetector.isSupported;
 
     return Scaffold(
@@ -60,22 +55,6 @@ class MedicionHubScreen extends StatelessWidget {
                 : 'Las medidas hacen que el modelo encaje de verdad. Puedes combinar las tres vías.',
             icon: Icons.straighten,
           ),
-
-          // --- AR ---
-          _MethodCard(
-            title: 'Objetos con AR',
-            description:
-                'Apunta con la cámara y toca los dos extremos del objeto.',
-            icon: Icons.view_in_ar,
-            available: arSupported,
-            unavailableReason:
-                'La medición AR necesita un móvil Android o iPhone con ARCore o ARKit.',
-            badge: 'Recomendado',
-            onOpen: () => Navigator.of(context).push(
-              ArMeasurementScreen.route(target: target),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
 
           // --- Mano ---
           _MethodCard(
@@ -175,10 +154,6 @@ class MedicionHubScreen extends StatelessWidget {
     );
   }
 
-  bool _arSupported() {
-    if (kIsWeb) return false;
-    return Platform.isAndroid || Platform.isIOS;
-  }
 }
 
 /// Tarjeta de un método de medición, con estado de disponibilidad.
@@ -190,7 +165,6 @@ class _MethodCard extends StatelessWidget {
     required this.available,
     required this.onOpen,
     this.unavailableReason,
-    this.badge,
   });
 
   final String title;
@@ -199,7 +173,6 @@ class _MethodCard extends StatelessWidget {
   final bool available;
   final VoidCallback onOpen;
   final String? unavailableReason;
-  final String? badge;
 
   @override
   Widget build(BuildContext context) {
@@ -241,23 +214,6 @@ class _MethodCard extends StatelessWidget {
                               style: theme.textTheme.titleMedium,
                             ),
                           ),
-                          if (badge != null && available)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: AppSpacing.sm,
-                                vertical: AppSpacing.xxs,
-                              ),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.primaryContainer,
-                                borderRadius: BorderRadius.circular(
-                                  AppRadius.pill,
-                                ),
-                              ),
-                              child: Text(
-                                badge!,
-                                style: theme.textTheme.labelSmall,
-                              ),
-                            ),
                         ],
                       ),
                       const SizedBox(height: AppSpacing.xxs),
@@ -318,7 +274,6 @@ class _MeasurementTile extends StatelessWidget {
     final theme = Theme.of(context);
 
     final icon = switch (measurement.source) {
-      MeasurementSource.ar => Icons.view_in_ar,
       MeasurementSource.hand => Icons.back_hand,
       MeasurementSource.manual => Icons.edit,
     };

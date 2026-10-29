@@ -22,7 +22,7 @@ import '../modelos/measurement_models.dart';
 /// ```dart
 /// final detector = HandDetector.createIfSupported();
 /// if (detector == null) {
-///   // iOS o plataforma sin soporte: usar AR o medida manual.
+///   // iOS o plataforma sin soporte: usar la medida a mano.
 /// }
 /// ```
 class HandDetector {
@@ -49,7 +49,7 @@ class HandDetector {
     }
     if (Platform.isIOS) {
       return 'MediaPipe (hand_landmarker) solo está implementado para Android. '
-          'En iOS usa la medición AR o la entrada manual.';
+          'En iOS usa la medida a mano.';
     }
     return 'La detección de manos solo está disponible en Android.';
   }

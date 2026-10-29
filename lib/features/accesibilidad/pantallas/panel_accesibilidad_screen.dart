@@ -10,14 +10,19 @@ import '../providers/accessibility_provider.dart';
 /// Panel de accesibilidad conmutable en caliente.
 ///
 /// Combina dos capas:
-///  1. Los modos propios de Lumina (TalkBack, botones grandes, pictogramas,
-///     reducir movimiento), gestionados por [AccessibilityProvider].
-///  2. Los controles WCAG que aporta `accessibility_widget` (dislexia,
-///     contraste, saturación, guía de lectura, escala de texto...), servidos
-///     por [wcag.AccessibilityPanelContent].
+///  1. Los modos propios de Lumina (botones grandes, pictogramas, dislexia,
+///     alto contraste, reducir movimiento), gestionados por
+///     [AccessibilityProvider].
+///  2. Los controles WCAG que aporta `accessibility_widget` (escala de texto,
+///     negrita, espaciados, saturación, guía de lectura...), servidos por su
+///     controlador.
 ///
-/// Ambas capas se sincronizan en dos direcciones para que el tema de toda la
-/// app (no solo el panel) refleje los cambios al instante.
+/// **Los controles se dibujan aquí, en español, en lugar de usar el
+/// `AccessibilityPanelContent` del paquete**: ese widget trae los textos fijos
+/// en inglés ("Text Size", "Dyslexia Friendly Font"...), y un panel de
+/// accesibilidad en inglés es inservible para el público de Lumina. Se sigue
+/// usando el controlador del paquete, que es donde vive la lógica y la
+/// persistencia; solo se sustituye la capa de presentación.
 class PanelAccesibilidadScreen extends StatefulWidget {
   const PanelAccesibilidadScreen({super.key});
 
@@ -53,13 +58,13 @@ class _PanelAccesibilidadScreenState extends State<PanelAccesibilidadScreen> {
     super.dispose();
   }
 
-  AccessibilityProvider get _provider =>
-      context.read<AccessibilityProvider>();
+  AccessibilityProvider get _provider => context.read<AccessibilityProvider>();
 
-  /// `accessibility_widget` -> Lumina (por ejemplo, al tocar "Dislexia" en el
-  /// panel WCAG, Lumina debe activar Andika en toda la app).
+  /// `accessibility_widget` -> Lumina (por ejemplo, al activar "dislexia" en un
+  /// control, Lumina debe activar Andika en toda la app).
   void _onWcagChanged() {
-    if (_syncing || !mounted) {
+    if (!mounted) return;
+    if (_syncing) {
       setState(() {});
       return;
     }
@@ -71,6 +76,9 @@ class _PanelAccesibilidadScreenState extends State<PanelAccesibilidadScreen> {
     }
     if (settings.highContrast != provider.highContrastEnabled) {
       provider.setHighContrast(settings.highContrast);
+    }
+    if (settings.stopAnimations != provider.reduceMotionEnabled) {
+      provider.setReduceMotion(settings.stopAnimations);
     }
     _syncing = false;
     setState(() {});
@@ -86,34 +94,58 @@ class _PanelAccesibilidadScreenState extends State<PanelAccesibilidadScreen> {
       settings.copyWith(
         dyslexiaFont: provider.dyslexiaFontEnabled,
         highContrast: provider.highContrastEnabled,
+        stopAnimations: provider.reduceMotionEnabled,
       ),
     );
     _syncing = false;
   }
 
+  /// Aplica un cambio al controlador del paquete y, si toca un modo de Lumina,
+  /// lo propaga al provider para que el tema de toda la app se reconstruya.
+  void _updateWcag(
+    wcag.AccessibilitySettings Function(wcag.AccessibilitySettings) mutate, {
+    bool dyslexia = false,
+    bool highContrast = false,
+    bool reduceMotion = false,
+  }) {
+    _syncing = true;
+    _wcag.update(mutate(_wcag.settings));
+    _syncing = false;
+
+    if (dyslexia) {
+      _provider.setDyslexiaFont(_wcag.settings.dyslexiaFont);
+    }
+    if (highContrast) {
+      _provider.setHighContrast(_wcag.settings.highContrast);
+    }
+    if (reduceMotion) {
+      _provider.setReduceMotion(_wcag.settings.stopAnimations);
+    }
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AccessibilityProvider>();
+    final settings = _wcag.settings;
 
     // Reconstruye el tema del panel combinando ambas fuentes de verdad, de modo
     // que el cambio se ve antes incluso de salir del panel.
-    final wcagSettings = _wcag.settings;
     final baseExtension = provider.themeExtension;
     final effectiveExtension = baseExtension.copyWith(
-      dyslexiaFont: provider.dyslexiaFontEnabled || wcagSettings.dyslexiaFont,
-      highContrast: provider.highContrastEnabled || wcagSettings.highContrast,
-      letterSpacing: wcagSettings.letterSpacing != 0
-          ? wcagSettings.letterSpacing
+      dyslexiaFont: provider.dyslexiaFontEnabled || settings.dyslexiaFont,
+      highContrast: provider.highContrastEnabled || settings.highContrast,
+      letterSpacing: settings.letterSpacing != 0
+          ? settings.letterSpacing
           : baseExtension.letterSpacing,
-      lineHeight: wcagSettings.lineSpacing != 1.0
-          ? wcagSettings.lineSpacing
+      lineHeight: settings.lineSpacing != 1.0
+          ? settings.lineSpacing
           : baseExtension.lineHeight,
     );
-    final highContrast =
-        provider.highContrastEnabled || wcagSettings.highContrast;
+    final highContrast = provider.highContrastEnabled || settings.highContrast;
 
     final ambient = Theme.of(context);
-    final isDark = wcagSettings.darkMode ?? ambient.brightness == Brightness.dark;
+    final isDark = settings.darkMode ?? ambient.brightness == Brightness.dark;
     final panelTheme = isDark
         ? AppTheme.dark(
             accessibility: effectiveExtension,
@@ -167,13 +199,20 @@ class _PanelAccesibilidadScreenState extends State<PanelAccesibilidadScreen> {
                             icon: Icons.play_arrow,
                             pictogram: _presetPictogram(preset),
                             isPrimary: false,
-                            onPressed: () =>
-                                provider.applyPreset(preset),
+                            onPressed: () {
+                              provider.applyPreset(preset);
+                              _pushProviderToWcag();
+                              setState(() {});
+                            },
                           ),
                         ),
                     ],
                   ),
                 ),
+                const SizedBox(height: AppSpacing.lg),
+
+                // --- Lector de pantalla del sistema ---
+                const _ScreenReaderCard(),
                 const SizedBox(height: AppSpacing.lg),
 
                 LuminaSectionCard(
@@ -182,14 +221,6 @@ class _PanelAccesibilidadScreenState extends State<PanelAccesibilidadScreen> {
                   leadingIcon: Icons.tune,
                   child: Column(
                     children: [
-                      _ModeSwitch(
-                        title: 'Modo TalkBack / VoiceOver',
-                        description:
-                            'Etiquetas y anuncios para el lector de pantalla, con orden de foco lógico.',
-                        value: provider.talkBackEnabled,
-                        onChanged: provider.setTalkBack,
-                        icon: Icons.record_voice_over,
-                      ),
                       _ModeSwitch(
                         title: 'Botones grandes',
                         description:
@@ -206,20 +237,16 @@ class _PanelAccesibilidadScreenState extends State<PanelAccesibilidadScreen> {
                         onChanged: provider.setPictograms,
                         icon: Icons.emoji_emotions_outlined,
                       ),
-                      _ModeSwitch(
-                        title: 'Reducir movimiento',
-                        description: 'Desactiva animaciones y auto-rotación.',
-                        value: provider.reduceMotionEnabled,
-                        onChanged: provider.setReduceMotion,
-                        icon: Icons.motion_photos_off,
-                      ),
                       Divider(color: panelTheme.dividerTheme.color),
                       _ModeSwitch(
                         title: 'Modo dislexia (fuente Andika)',
                         description:
                             'Fuente Andika, mayor altura de línea y espaciado entre letras.',
                         value: provider.dyslexiaFontEnabled,
-                        onChanged: provider.setDyslexiaFont,
+                        onChanged: (value) => _updateWcag(
+                          (s) => s.copyWith(dyslexiaFont: value),
+                          dyslexia: true,
+                        ),
                         icon: Icons.text_fields,
                       ),
                       _ModeSwitch(
@@ -227,25 +254,206 @@ class _PanelAccesibilidadScreenState extends State<PanelAccesibilidadScreen> {
                         description:
                             'Colores reforzados (amarillo sobre negro o negro sobre blanco).',
                         value: provider.highContrastEnabled,
-                        onChanged: provider.setHighContrast,
+                        onChanged: (value) => _updateWcag(
+                          (s) => s.copyWith(highContrast: value),
+                          highContrast: true,
+                        ),
                         icon: Icons.contrast,
+                      ),
+                      _ModeSwitch(
+                        title: 'Reducir movimiento',
+                        description: 'Desactiva animaciones y auto-rotación.',
+                        value: provider.reduceMotionEnabled,
+                        onChanged: (value) => _updateWcag(
+                          (s) => s.copyWith(stopAnimations: value),
+                          reduceMotion: true,
+                        ),
+                        icon: Icons.motion_photos_off,
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
 
+                // --- Texto y lectura ---
                 LuminaSectionCard(
-                  title: 'Más ajustes de lectura y color',
-                  subtitle:
-                      'Controles WCAG: escala de texto, saturación, guía de lectura, cursor grande...',
-                  leadingIcon: Icons.visibility,
-                  padding: const EdgeInsets.symmetric(
-                    vertical: AppSpacing.sm,
+                  title: 'Texto y lectura',
+                  subtitle: 'Ajustes de tipografía y guía de lectura.',
+                  leadingIcon: Icons.text_fields,
+                  child: Column(
+                    children: [
+                      _SliderTile(
+                        title: 'Tamaño del texto',
+                        description: 'Escala todo el texto de la aplicación.',
+                        value: settings.textScale,
+                        min: 1.0,
+                        max: 2.0,
+                        divisions: 10,
+                        valueLabel: '${(settings.textScale * 100).round()} %',
+                        onChanged: (value) => _updateWcag(
+                          (s) => s.copyWith(textScale: value),
+                        ),
+                      ),
+                      _ModeSwitch(
+                        title: 'Texto en negrita',
+                        description: 'Aumenta el grosor para leer mejor.',
+                        value: settings.boldText,
+                        onChanged: (value) => _updateWcag(
+                          (s) => s.copyWith(boldText: value),
+                        ),
+                        icon: Icons.format_bold,
+                      ),
+                      _SliderTile(
+                        title: 'Espacio entre líneas',
+                        description: 'Separa más las líneas de texto.',
+                        value: settings.lineSpacing,
+                        min: 1.0,
+                        max: 2.5,
+                        divisions: 15,
+                        valueLabel: settings.lineSpacing.toStringAsFixed(1),
+                        onChanged: (value) => _updateWcag(
+                          (s) => s.copyWith(lineSpacing: value),
+                        ),
+                      ),
+                      _SliderTile(
+                        title: 'Espacio entre letras',
+                        description: 'Separa más las letras.',
+                        value: settings.letterSpacing,
+                        min: 0.0,
+                        max: 4.0,
+                        divisions: 16,
+                        valueLabel: settings.letterSpacing.toStringAsFixed(1),
+                        onChanged: (value) => _updateWcag(
+                          (s) => s.copyWith(letterSpacing: value),
+                        ),
+                      ),
+                      _ModeSwitch(
+                        title: 'Guía de lectura',
+                        description:
+                            'Resalta la línea que estás leyendo con una banda horizontal.',
+                        value: settings.readingGuide,
+                        onChanged: (value) => _updateWcag(
+                          (s) => s.copyWith(readingGuide: value),
+                        ),
+                        icon: Icons.horizontal_rule,
+                      ),
+                    ],
                   ),
-                  child: const wcag.AccessibilityPanelContent(),
                 ),
                 const SizedBox(height: AppSpacing.lg),
+
+                // --- Color y contraste ---
+                LuminaSectionCard(
+                  title: 'Color y contraste',
+                  subtitle: 'Ajusta los colores de toda la aplicación.',
+                  leadingIcon: Icons.palette_outlined,
+                  child: Column(
+                    children: [
+                      _ModeSwitch(
+                        title: 'Invertir colores',
+                        description: 'Invierte los colores de la aplicación.',
+                        value: settings.invertColors,
+                        onChanged: (value) => _updateWcag(
+                          (s) => s.copyWith(invertColors: value),
+                        ),
+                        icon: Icons.invert_colors,
+                      ),
+                      _SliderTile(
+                        title: 'Saturación del color',
+                        description:
+                            'A 0 el contenido se ve en escala de grises.',
+                        value: settings.saturation,
+                        min: 0.0,
+                        max: 1.0,
+                        divisions: 10,
+                        valueLabel: '${(settings.saturation * 100).round()} %',
+                        onChanged: (value) => _updateWcag(
+                          (s) => s.copyWith(saturation: value),
+                        ),
+                      ),
+                      _ThemeModeTile(
+                        value: settings.darkMode,
+                        onChanged: (value) => _updateWcag(
+                          (s) => value == null
+                              ? s.copyWith(clearDarkMode: true)
+                              : s.copyWith(darkMode: value),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+
+                // --- Contenido y resaltado ---
+                LuminaSectionCard(
+                  title: 'Contenido y resaltado',
+                  subtitle:
+                      'Útil para baja visión y para reducir distracciones.',
+                  leadingIcon: Icons.visibility_outlined,
+                  child: Column(
+                    children: [
+                      _ModeSwitch(
+                        title: 'Ocultar imágenes',
+                        description:
+                            'Sustituye las imágenes por un texto descriptivo.',
+                        value: settings.hideImages,
+                        onChanged: (value) => _updateWcag(
+                          (s) => s.copyWith(hideImages: value),
+                        ),
+                        icon: Icons.image_not_supported_outlined,
+                      ),
+                      _ModeSwitch(
+                        title: 'Resaltar enlaces',
+                        description:
+                            'Subraya y colorea los enlaces para localizarlos mejor.',
+                        value: settings.highlightLinks,
+                        onChanged: (value) => _updateWcag(
+                          (s) => s.copyWith(highlightLinks: value),
+                        ),
+                        icon: Icons.link,
+                      ),
+                      _ModeSwitch(
+                        title: 'Resaltar tarjetas y listas',
+                        description:
+                            'Dibuja el contorno de todo lo que se puede tocar.',
+                        value: settings.highlightTiles,
+                        onChanged: (value) => _updateWcag(
+                          (s) => s.copyWith(highlightTiles: value),
+                        ),
+                        icon: Icons.crop_free,
+                      ),
+                      _ModeSwitch(
+                        title: 'Resaltar títulos',
+                        description:
+                            'Marca visualmente los títulos de cada sección.',
+                        value: settings.highlightHeadings,
+                        onChanged: (value) => _updateWcag(
+                          (s) => s.copyWith(highlightHeadings: value),
+                        ),
+                        icon: Icons.title,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+
+                // --- Respuesta táctil ---
+                LuminaSectionCard(
+                  title: 'Respuesta táctil',
+                  subtitle: 'Ayuda a confirmar que un toque se ha registrado.',
+                  leadingIcon: Icons.vibration,
+                  child: _ModeSwitch(
+                    title: 'Vibración al tocar',
+                    description:
+                        'Una vibración corta cada vez que se pulsa un control.',
+                    value: settings.hapticFeedback,
+                    onChanged: (value) => _updateWcag(
+                      (s) => s.copyWith(hapticFeedback: value),
+                    ),
+                    icon: Icons.vibration,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xl),
 
                 AccessibleButton(
                   label: 'Restablecer todos los ajustes',
@@ -278,6 +486,51 @@ class _PanelAccesibilidadScreenState extends State<PanelAccesibilidadScreen> {
       };
 }
 
+/// Explica cómo activar el lector de pantalla del sistema.
+///
+/// Se ofrece como información y no como interruptor porque TalkBack y
+/// VoiceOver se encienden desde los ajustes del móvil: una app no puede
+/// activarlos. Prometer un botón que no funciona sería peor que no tenerlo, así
+/// que aquí se explica la ruta exacta.
+class _ScreenReaderCard extends StatelessWidget {
+  const _ScreenReaderCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return LuminaSectionCard(
+      title: 'Lector de pantalla (TalkBack / VoiceOver)',
+      subtitle:
+          'TalkBack y VoiceOver son lectores del sistema: se activan en los ajustes del teléfono, no dentro de la app.',
+      leadingIcon: Icons.record_voice_over,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Lumina ya está preparada: todos sus botones, campos y avisos tienen '
+            'descripción y orden de lectura, así que funcionan en cuanto actives '
+            'el lector.',
+            style: theme.textTheme.bodyMedium,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text('En Android', style: theme.textTheme.labelLarge),
+          Text(
+            'Ajustes → Accesibilidad → TalkBack → Usar TalkBack.',
+            style: theme.textTheme.bodySmall,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text('En iPhone', style: theme.textTheme.labelLarge),
+          Text(
+            'Ajustes → Accesibilidad → VoiceOver → activar.',
+            style: theme.textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Interruptor con etiqueta, descripción y pictograma opcional.
 class _ModeSwitch extends StatelessWidget {
   const _ModeSwitch({
@@ -305,7 +558,9 @@ class _ModeSwitch extends StatelessWidget {
       hint: description,
       container: true,
       child: Padding(
-        padding: EdgeInsets.symmetric(vertical: a11y.bigButtons ? AppSpacing.md : AppSpacing.sm),
+        padding: EdgeInsets.symmetric(
+          vertical: a11y.bigButtons ? AppSpacing.md : AppSpacing.sm,
+        ),
         child: Row(
           children: [
             Icon(icon, size: a11y.iconSize, color: theme.colorScheme.primary),
@@ -326,13 +581,144 @@ class _ModeSwitch extends StatelessWidget {
               ),
             ),
             SizedBox(width: a11y.controlGap),
-            // `MergeSemantics` con el switch dentro evita que TalkBack anuncie
-            // el texto dos veces: una por la fila y otra por el propio switch.
+            // Se excluye el switch del árbol semántico para que el lector
+            // anuncie una sola vez el título y su estado, en lugar de leer
+            // además el propio control.
             ExcludeSemantics(
               child: Switch(value: value, onChanged: onChanged),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Ajuste numérico con etiqueta, descripción y valor visible.
+class _SliderTile extends StatelessWidget {
+  const _SliderTile({
+    required this.title,
+    required this.description,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.divisions,
+    required this.valueLabel,
+    required this.onChanged,
+  });
+
+  final String title;
+  final String description;
+  final double value;
+  final double min;
+  final double max;
+  final int divisions;
+  final String valueLabel;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(title, style: theme.textTheme.titleMedium),
+              ),
+              Text(valueLabel, style: theme.textTheme.titleMedium),
+            ],
+          ),
+          Text(
+            description,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          Semantics(
+            slider: true,
+            label: title,
+            hint: description,
+            value: valueLabel,
+            child: ExcludeSemantics(
+              child: Slider(
+                value: value.clamp(min, max),
+                min: min,
+                max: max,
+                divisions: divisions,
+                onChanged: onChanged,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Selector de tema claro, oscuro o el del sistema.
+class _ThemeModeTile extends StatelessWidget {
+  const _ThemeModeTile({required this.value, required this.onChanged});
+
+  /// `null` = seguir el sistema.
+  final bool? value;
+  final ValueChanged<bool?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Tema de la aplicación', style: theme.textTheme.titleMedium),
+          Text(
+            'Claro, oscuro o el que tenga configurado el teléfono.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Semantics(
+            label: 'Tema de la aplicación',
+            child: SegmentedButton<String>(
+              segments: const <ButtonSegment<String>>[
+                ButtonSegment<String>(
+                  value: 'system',
+                  label: Text('Sistema'),
+                  icon: Icon(Icons.brightness_auto),
+                ),
+                ButtonSegment<String>(
+                  value: 'light',
+                  label: Text('Claro'),
+                  icon: Icon(Icons.light_mode),
+                ),
+                ButtonSegment<String>(
+                  value: 'dark',
+                  label: Text('Oscuro'),
+                  icon: Icon(Icons.dark_mode),
+                ),
+              ],
+              selected: <String>{
+                value == null
+                    ? 'system'
+                    : value!
+                        ? 'dark'
+                        : 'light',
+              },
+              onSelectionChanged: (selection) {
+                final chosen = selection.first;
+                onChanged(chosen == 'system' ? null : chosen == 'dark');
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

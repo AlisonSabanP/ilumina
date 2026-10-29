@@ -7,6 +7,7 @@ import '../../accesibilidad/providers/accessibility_provider.dart';
 import '../../accesibilidad/widgets/accessibility_fab.dart';
 import '../../formulario/modelos/formulario_provider.dart';
 import '../../visor3d/pantallas/visor_modelo_screen.dart';
+import '../modelos/meshy_models.dart';
 import '../providers/generation_provider.dart';
 
 /// Pantalla de generación 3D con Meshy AI.
@@ -15,9 +16,9 @@ import '../providers/generation_provider.dart';
 /// (`PENDING` -> `IN_PROGRESS` -> `SUCCEEDED`) con su porcentaje de progreso, y
 /// ofrece reintentar ante cualquier error.
 ///
-/// Sin una clave propia, la pantalla trabaja en modo de demostración: carga una
-/// pieza de ejemplo incluida en la app para que se pueda probar el visor, la
-/// descarga y el uso compartido sin gastar créditos ni necesitar conexión.
+/// Sin una clave propia de Meshy, la pieza se construye en el propio
+/// dispositivo (`LocalGeneratorService`): no gasta créditos, funciona sin
+/// conexión y el resultado es un STL imprimible de verdad.
 class GeneracionScreen extends StatefulWidget {
   const GeneracionScreen({super.key});
 
@@ -83,15 +84,15 @@ class _GeneracionScreenState extends State<GeneracionScreen> {
             icon: Icons.auto_awesome,
           ),
 
-          if (generation.isDemoMode)
-            const LuminaInfoBanner(
-              message:
-                  'Modo de demostración: se muestra una pieza de ejemplo para que '
-                  'pruebes el visor, la descarga y el uso compartido. Para generar '
-                  'piezas reales hace falta una clave de Meshy.',
-              icon: Icons.science_outlined,
-              tone: LuminaBannerTone.warning,
-            ),
+          LuminaInfoBanner(
+            message: generation.isLocalMode
+                ? 'Lumina construye la pieza en el propio dispositivo a partir de '
+                    'tus medidas: es gratis, funciona sin conexión y el archivo '
+                    'STL sale listo para imprimir.'
+                : 'Se está usando tu clave de Meshy: la pieza la genera el '
+                    'servicio en la nube y puede tardar unos minutos.',
+            icon: generation.isLocalMode ? Icons.offline_bolt : Icons.cloud,
+          ),
 
           const SizedBox(height: AppSpacing.lg),
           _StatusCard(generation: generation),
@@ -111,8 +112,14 @@ class _GeneracionScreenState extends State<GeneracionScreen> {
               ),
             ),
 
+          // --- Ficha de la pieza local ---
+          if (generation.model?.isLocal == true) ...[
+            const SizedBox(height: AppSpacing.lg),
+            _LocalPieceCard(model: generation.model!),
+          ],
+
           // --- Tarea ---
-          if (generation.task != null && !generation.isDemoMode) ...[
+          if (generation.task != null && generation.isMeshyMode) ...[
             const SizedBox(height: AppSpacing.lg),
             LuminaSectionCard(
               title: 'Progreso de la generación',
@@ -189,8 +196,9 @@ class _GeneracionScreenState extends State<GeneracionScreen> {
             const SizedBox(height: AppSpacing.lg),
             LuminaSectionCard(
               title: 'Modelo listo',
-              subtitle: generation.isDemoMode
-                  ? 'Pieza de ejemplo lista para ver, descargar y compartir.'
+              subtitle: generation.model?.isLocal == true
+                  ? 'Pieza construida en el dispositivo, lista para ver, descargar '
+                      'y compartir.'
                   : 'Meshy conserva los archivos tres días. Descárgalo o compártelo para no perderlo.',
               leadingIcon: Icons.check_circle,
               child: Column(
@@ -315,7 +323,9 @@ class _StatusCard extends StatelessWidget {
     final statusText = switch (generation.phase) {
       GenerationPhase.idle => 'Sin empezar',
       GenerationPhase.preparing => 'Preparando tu diseño...',
-      GenerationPhase.creating => 'Enviando el diseño...',
+      GenerationPhase.creating => generation.isLocalMode
+          ? 'Construyendo la pieza...'
+          : 'Enviando el diseño...',
       GenerationPhase.polling => generation.task == null
           ? 'Consultando el estado...'
           : '${generation.task!.status.label} '
@@ -383,17 +393,91 @@ class _StatusCard extends StatelessWidget {
                   style: theme.textTheme.bodySmall,
                 ),
               ],
-              if (generation.isDemoMode) ...[
+              if (generation.isLocalMode) ...[
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  'Pieza de demostración: no se ha llamado al servicio de '
-                  'generación.',
+                  'La pieza se construye en el dispositivo: no se envía nada a '
+                  'ningún servicio.',
                   style: theme.textTheme.bodySmall,
                 ),
               ],
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Ficha de la pieza construida en el dispositivo.
+///
+/// Muestra lo que un usuario necesita saber antes de imprimir: qué se ha
+/// construido, con qué medidas y qué decisiones se tomaron cuando faltaba
+/// algún dato. Los avisos son importantes: si el diámetro salió de un valor
+/// estándar y no de una medida real, la pieza no encajará y hay que decirlo.
+class _LocalPieceCard extends StatelessWidget {
+  const _LocalPieceCard({required this.model});
+
+  final GeneratedModel model;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dimensions = model.dimensionsMm;
+
+    return LuminaSectionCard(
+      title: 'Ficha de la pieza',
+      subtitle: model.pieceSummary,
+      leadingIcon: Icons.straighten,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (dimensions.isNotEmpty) ...[
+            Text('Medidas', style: theme.textTheme.labelLarge),
+            const SizedBox(height: AppSpacing.xs),
+            for (final entry in dimensions.entries)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxs),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        entry.key[0].toUpperCase() + entry.key.substring(1),
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                    ),
+                    Text(
+                      '${entry.value.toStringAsFixed(1)} mm',
+                      style: theme.textTheme.titleMedium,
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: AppSpacing.md),
+          ],
+          if (model.pieceNotes.isNotEmpty) ...[
+            Text('Notas de fabricación', style: theme.textTheme.labelLarge),
+            const SizedBox(height: AppSpacing.xs),
+            for (final note in model.pieceNotes)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.check_circle_outline,
+                      size: 18,
+                      color: theme.colorScheme.primary,
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Text(note, style: theme.textTheme.bodySmall),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ],
       ),
     );
   }

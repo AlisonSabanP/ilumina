@@ -1,32 +1,24 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Cámara: la usan la medición AR, la detección de manos y el escaneo de objetos. -->
+    <!-- Cámara: la usa la detección de manos (21 puntos). -->
     <uses-permission android:name="android.permission.CAMERA" />
-    <!-- Internet: llamadas a la API de Meshy AI y descarga del .glb. -->
+    <!-- Internet: solo se usa si el usuario configura su clave de Meshy AI.
+         La generación local y el visor funcionan sin conexión. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- El visor 3D (power3d) muestra un WebView local; no requiere permiso extra,
          pero sí que el tráfico hacia api.meshy.ai sea HTTPS (lo es). -->
 
-    <!-- ARCore. Se marca como NO obligatorio para que la app también se instale en
-         dispositivos sin AR (donde la medición AR queda deshabilitada pero el resto
-         de Lumina, incluida la detección de manos, sigue funcionando).
-         `tools:replace` es necesario porque `arcore_flutter_plugin` declara esta
-         misma característica como obligatoria en su propio manifiesto. -->
-    <uses-feature
-        android:name="android.hardware.camera.ar"
-        android:required="false"
-        tools:replace="android:required" />
+    <!-- Cámara. Se marca como NO obligatoria para que la app se pueda instalar
+         en un dispositivo sin cámara; en ese caso la medición con la cámara
+         queda deshabilitada, pero la medida a mano y el resto de Lumina siguen
+         funcionando. -->
     <uses-feature
         android:name="android.hardware.camera"
         android:required="false" />
     <uses-feature
         android:name="android.hardware.camera.autofocus"
         android:required="false" />
-    <!-- Sceneform (ARCore) necesita OpenGL ES 3.0. -->
-    <uses-feature
-        android:glEsVersion="0x00030000"
-        android:required="true" />
 
     <application
         android:label="Lumina"
@@ -59,12 +51,6 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-        <!-- "optional": Google Play ofrece instalar ARCore si el dispositivo lo
-             soporta, pero no bloquea la instalación de Lumina en el resto. -->
-        <meta-data
-            android:name="com.google.ar.core"
-            android:value="optional"
-            tools:replace="android:value" />
     </application>
 
     <!-- Required to query activities that can process text, see:

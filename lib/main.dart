@@ -16,8 +16,8 @@ import 'core/env.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Carga del .env. Si falta o está vacío, Env cae en la clave de prueba de
-  // Meshy y la aplicación sigue siendo utilizable en modo demostración.
+  // Carga del .env. Si falta o está vacío, Env cae en el valor centinela y la
+  // aplicación genera las piezas en el dispositivo, sin llamar a Meshy.
   await Env.load();
 
   await SystemChrome.setPreferredOrientations(

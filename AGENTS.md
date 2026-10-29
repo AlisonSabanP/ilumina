@@ -9,14 +9,14 @@ saber para trabajar en el código sin romperlo.
 ```bash
 flutter pub get
 flutter analyze          # debe quedar en "No issues found!"
-flutter test             # 20 pruebas, todas deben pasar
+flutter test             # 32 pruebas, todas deben pasar
 flutter build apk --debug
 flutter build apk --release   # ~5 min; R8 tarda
 ```
 
 Android necesita JDK 17, Android SDK 36 y NDK 28.2.13676358.
 `android/gradle.properties` usa `-Xmx4G`: subirlo provoca que el runtime se
-quede sin memoria al compilar Filament (Sceneform) y MediaPipe a la vez.
+quede sin memoria al compilar MediaPipe junto con el WebView de `power3d`.
 
 ## Arquitectura
 
@@ -29,45 +29,88 @@ quede sin memoria al compilar Filament (Sceneform) y MediaPipe a la vez.
 - **Frontera con paquetes frágiles:** los paquetes con API inestable o
   específicos de plataforma se envuelven en un adaptador para que sus tipos no
   lleguen a la UI. Ejemplos: `hand_detector.dart` (envuelve
-  `hand_landmarker`), `meshy_service.dart` (envuelve la API REST),
-  `ar_measurement_screen.dart` (usa la interfaz `ArService` de `neom_ar`, no
-  las clases de ARCore/ARKit directamente).
+  `hand_landmarker`), `meshy_service.dart` (envuelve la API REST).
 - **Accesibilidad:** `AccessibilityProvider` es la fuente de verdad. Se
   sincroniza en dos direcciones con `accessibility_widget` en
   `_AccessibilitySync` (`lib/app/app.dart`) y en el panel
   (`lib/features/accesibilidad/pantallas/panel_accesibilidad_screen.dart`). Si
   tocas uno, revisa el otro: el flag `_syncing` existe para evitar bucles.
 
-## Los dos forks de `third_party/`
+## Generación 3D: local por defecto, Meshy opcional
 
-No son opcionales. Sin ellos no compila. Se declaran en
-`dependency_overrides` de `pubspec.yaml`.
+**La vía por defecto no usa ninguna API.** `LocalGeneratorService`
+(`lib/features/generacion3d/servicios/local_generator_service.dart`) construye
+geometría paramétrica real con `MeshBuilder`
+(`lib/shared/servicios/stl_builder.dart`) y la exporta a **STL binario** (para
+el laminador) y a **GLB** (para el visor). Cuesta cero, funciona sin conexión y
+produce un archivo imprimible de verdad.
 
-- `third_party/arcore_flutter_plugin` — el original de pub.dev llama a
-  `jcenter()`, trae AGP 3.5.3 en su `buildscript` y depende de Sceneform 1.13
-  (retirado). El fork moderniza el Gradle, sube a Sceneform 1.17.1 y excluye
-  `com.android.support` de `sceneform-ux` (provocaba "Duplicate class").
-  **Único cambio de código Kotlin:** `MotionEvent?` → `MotionEvent` en
-  `ArCoreView.kt`, por la nueva firma de `setOnTouchListener` en Sceneform 1.17.
+Meshy solo se usa si hay una clave propia configurada (`Env.isMeshyTestMode` es
+`false`). Esto no es una preferencia estética: **Meshy no tiene modo de prueba
+gratuito** y responde `401` a cualquier clave que no sea de una cuenta real, así
+que sin clave propia la app funcionaría siempre con error.
+
+- La vía local mantiene las mismas fases (`creating` → `polling` →
+  `succeeded`) que la remota para que la UI no tenga dos caminos.
+- Las piezas locales se escriben en `lumina_piezas/` del directorio de
+  documentos; las de Meshy en `lumina_models/`.
+- `GeneratedModel.isLocal` distingue unas de otras.
+
+## El Braille necesita una fuente propia
+
+`braille_text` dibuja con `fontFamily: 'Braille'`, **pero el paquete no
+empaqueta ninguna fuente con ese nombre**: sin declararla, el Braille se ve como
+cuadros vacíos. `pubspec.yaml` registra `assets/fonts/BraillePoints.ttf`
+(DejaVu Sans, que cubre los 256 caracteres de U+2800–U+28FF) con la familia
+`Braille` justamente para eso. No la quites.
+
+Además, `BrailleService.normalize` vacía el texto que no sabe representar: si
+la normalización deja la cadena vacía, la vista previa **no** debe llamar a
+`BrailleText` con ese texto vacío (era el fallo original: parecía que la
+etiqueta "no funcionaba"). `braille_screen.dart` comprueba
+`_hasPrintableLabel` antes de dibujar.
+
+## TalkBack no es un interruptor de la app
+
+No existe (ni debe existir) un `setTalkBack`: TalkBack y VoiceOver son lectores
+del sistema y solo se activan desde los ajustes del móvil. Lo que Lumina
+garantiza es que todos sus widgets tengan `Semantics` correctos. El panel de
+accesibilidad lo explica en una tarjeta informativa. No reintroduzcas un
+interruptor que no puede cumplir lo que promete.
+
+## El panel de accesibilidad está en español a propósito
+
+`accessibility_widget` trae su panel con los textos fijos en inglés ("Text
+Size", "Dyslexia Friendly Font"...). Lumina **no** usa su
+`AccessibilityPanelContent`: dibuja los controles en
+`panel_accesibilidad_screen.dart` y sigue usando solo el
+`AccessibilityController` del paquete, que es donde vive la lógica y la
+persistencia. Si añades un control nuevo, hazlo ahí, no con el widget del
+paquete.
+
+## La medición AR se retiró
+
+`neom_ar`, `arkit_plugin` y `arcore_flutter_plugin` **ya no son dependencias**.
+La medición AR no funcionaba de forma fiable y su fork de ARCore era la causa de
+la mayor parte de la fragilidad del build. Quedan dos vías: detección de manos
+(solo Android) y medida a mano. `MeasurementSource` ya no tiene el valor `ar`;
+los datos antiguos se leen como `manual` por el `orElse` de
+`Measurement.fromJson`.
+
+## El único fork de `third_party/`
+
 - `third_party/flutter_inappwebview_android` — `getDefaultProguardFile
   ('proguard-android.txt')` es rechazado por Gradle 9. Solo se cambia a
-  `proguard-android-optimize.txt`.
+  `proguard-android-optimize.txt`. Se declara en `dependency_overrides`.
 
-`analysis_options.yaml` excluye `third_party/**` del análisis; cada fork tiene
-su propio `analysis_options.yaml` relajado. No añadas lints ahí.
+`analysis_options.yaml` excluye `third_party/**` del análisis; el fork tiene su
+propio `analysis_options.yaml` relajado. No añadas lints ahí.
 
-## Trampas de configuración nativa
-
-Estas cuatro banderas/reglas son la diferencia entre que compile y que no.
-Están puestas y comentadas en el repositorio; si alguien las quita, vuelve el
-error:
+## Trampa de configuración nativa
 
 | Ajuste | Dónde | Sin él |
 | --- | --- | --- |
-| `android.newDsl=false` | `android/gradle.properties` | El plugin de Flutter no aplica |
-| `android.uniquePackageNames=false` | `android/gradle.properties` | Sceneform publica dos artefactos con el mismo `package` y AGP 9 aborta la fusión de manifiestos |
-| Exclusión de `com.android.support` en `sceneform-ux` | `third_party/arcore_flutter_plugin/android/build.gradle` | `Duplicate class android.support.v4...` |
-| `-dontwarn com.google.ar.sceneform.**` | `android/app/proguard-rules.pro` | R8 falla por clases opcionales de Sceneform que nunca se ejecutan |
+| `android.newDsl=false` | `android/gradle.properties` | El plugin de Flutter no aplica el DSL clásico |
 
 ## Al tocar el servicio de Meshy
 
@@ -98,15 +141,17 @@ que tiene prioridad (ver `lib/core/env.dart`). No metas una clave real en el
 El valor `msy_dummy_api_key_for_test_mode_12345678` del `.env` **no es una
 clave válida**: Meshy responde `401 Invalid API key` a cualquier clave que no
 sea de una cuenta real. Se usa solo como centinela para detectar "no hay clave
-configurada". En ese caso `GenerationProvider._runDemo` no llama a la API y
-carga `assets/models/demo_pieza.glb` con `Power3D.fromAsset`. No inventes un
-"modo de prueba" de Meshy que devuelva modelos: no existe.
-
-`assets/models/*.glb` está excluido por `.gitignore`, salvo `demo_pieza.glb`,
-que se versiona porque el modo de demostración lo necesita.
+configurada", y en ese caso la app genera en el dispositivo (ver arriba). No
+inventes un "modo de prueba" de Meshy que devuelva modelos: no existe.
 
 ## Marcadores `[VERIFICAR]`
 
-Hay dos en `ar_measurement_screen.dart`: la ruta de import interna de `neom_ar`
-y el camino de hit test por coordenadas. Ninguno se ha probado en un
-dispositivo real con cámara. No los des por buenos sin probarlos en hardware.
+El proyecto no tiene ninguno pendiente en el código. Lo que **sí** requiere
+hardware real y no se puede comprobar con `flutter test`:
+
+- La detección de manos (`hand_landmarker` + `CameraController`): necesita un
+  dispositivo Android con cámara.
+- La carga del `.glb` en `power3d`: necesita el WebView de un dispositivo o
+  emulador; en `flutter test` no se puede montar.
+- El trazo del Braille en pantalla: la fuente ya está declarada y los tests
+  cubren la conversión, pero el render final conviene verlo en el móvil.

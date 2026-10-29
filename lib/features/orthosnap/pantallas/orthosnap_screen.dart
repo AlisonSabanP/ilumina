@@ -20,7 +20,7 @@ import 'orthosnap_login_screen.dart';
 /// Flujo del profesional:
 ///   1. Zona de la lesión y tipo de férula.
 ///   2. Indicación clínica y lado afectado.
-///   3. Medidas del paciente (AR, mano o manual).
+///   3. Medidas del paciente (mano o manual).
 ///   4. Material y notas.
 ///   5. Generación con Meshy (estructura Voronoi, transpirable, alta precisión).
 ///
@@ -300,7 +300,7 @@ class _OrthoSnapScreenState extends State<OrthoSnapScreen> {
                       target: MeasurementTarget.clinico,
                     ),
                   ),
-                  hint: 'Abre la medición AR, de mano o manual',
+                  hint: 'Abre la medición de mano o la medida a mano',
                 ),
               ],
             ),

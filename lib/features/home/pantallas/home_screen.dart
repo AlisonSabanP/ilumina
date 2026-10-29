@@ -62,7 +62,7 @@ class HomeScreen extends StatelessWidget {
             LuminaSectionCard(
               title: 'Empieza ajustando la accesibilidad',
               subtitle:
-                  'Lumina se adapta a ti: botones grandes, TalkBack, pictogramas, '
+                  'Lumina se adapta a ti: botones grandes, pictogramas, '
                   'fuente para dislexia y alto contraste.',
               leadingIcon: Icons.accessibility_new,
               child: AccessibleButton(
@@ -143,8 +143,8 @@ class HomeScreen extends StatelessWidget {
                     leading: const Icon(Icons.threed_rotation),
                     title: Text(model.title),
                     subtitle: Text(
-                      model.isDemo
-                          ? 'Pieza de ejemplo'
+                      model.isLocal
+                          ? 'Creado en el dispositivo'
                           : model.isDownloaded
                               ? 'Guardado en el dispositivo'
                               : 'En la nube',
@@ -180,7 +180,6 @@ class HomeScreen extends StatelessWidget {
 
   List<String> _activeModes(AccessibilityProvider provider) {
     final modes = <String>[];
-    if (provider.talkBackEnabled) modes.add('TalkBack');
     if (provider.bigButtonsEnabled) modes.add('botones grandes');
     if (provider.pictogramsEnabled) modes.add('pictogramas');
     if (provider.dyslexiaFontEnabled) modes.add('dislexia');
@@ -231,8 +230,8 @@ class HistoryScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          model.isDemo
-                              ? 'Pieza de ejemplo'
+                          model.isLocal
+                              ? 'Creado en el dispositivo'
                               : model.isDownloaded
                                   ? 'Guardado en el dispositivo'
                                   : 'Solo en la nube (se borra a los 3 días)',

@@ -8,13 +8,21 @@ import '../../../core/app_theme.dart';
 /// Estado global de accesibilidad de Lumina.
 ///
 /// Responsabilidades:
-///  * Mantener los modos propios de Lumina: TalkBack, botones grandes y
-///    pictogramas, además de dislexia y alto contraste.
+///  * Mantener los modos propios de Lumina: botones grandes, pictogramas,
+///    dislexia, alto contraste y reducir movimiento.
 ///  * Persistir cada cambio en `SharedPreferences`.
 ///  * Exponer un [LuminaAccessibilityTheme] que se inyecta en [ThemeData] para
 ///    que los componentes adapten su geometría.
-///  * Anunciar los cambios con `SemanticsService` cuando el modo TalkBack está
-///    activo, de modo que el lector de pantalla confirme la acción.
+///  * Anunciar los cambios con `SemanticsService`, de modo que el lector de
+///    pantalla del sistema confirme la acción.
+///
+/// Nota sobre TalkBack/VoiceOver: **no es un modo que la app pueda activar**.
+/// TalkBack y VoiceOver son lectores de pantalla del sistema operativo, y solo
+/// se encienden desde los ajustes del móvil. Lumina no ofrece un interruptor
+/// para ellos porque no podría cumplirlo: lo que hace es etiquetar todos sus
+/// widgets con `Semantics` correctos, de modo que funcionen bien cuando el
+/// usuario active el lector por su cuenta. El panel de accesibilidad explica
+/// cómo encenderlo.
 ///
 /// Se eligió `provider` (ChangeNotifier) frente a `riverpod` porque el estado
 /// de accesibilidad es un único objeto global de ciclo de vida largo, sin
@@ -26,7 +34,6 @@ class AccessibilityProvider extends ChangeNotifier implements AccessibilityModes
   AccessibilityProvider({SharedPreferences? preferences})
       : _preferences = preferences; // ignore: prefer_initializing_formals
 
-  static const String _keyTalkBack = 'lumina.a11y.talkBack';
   static const String _keyBigButtons = 'lumina.a11y.bigButtons';
   static const String _keyPictograms = 'lumina.a11y.pictograms';
   static const String _keyDyslexia = 'lumina.a11y.dyslexiaFont';
@@ -35,7 +42,6 @@ class AccessibilityProvider extends ChangeNotifier implements AccessibilityModes
 
   SharedPreferences? _preferences;
 
-  bool _talkBackEnabled = false;
   bool _bigButtonsEnabled = false;
   bool _pictogramsEnabled = false;
   bool _dyslexiaFontEnabled = false;
@@ -43,9 +49,6 @@ class AccessibilityProvider extends ChangeNotifier implements AccessibilityModes
   bool _reduceMotionEnabled = false;
 
   // --- Lectura ---------------------------------------------------------------
-
-  @override
-  bool get talkBackEnabled => _talkBackEnabled;
 
   @override
   bool get bigButtonsEnabled => _bigButtonsEnabled;
@@ -66,7 +69,6 @@ class AccessibilityProvider extends ChangeNotifier implements AccessibilityModes
 
   /// Número de modos activos: la pantalla de inicio lo usa como resumen.
   int get activeModeCount => [
-        _talkBackEnabled,
         _bigButtonsEnabled,
         _pictogramsEnabled,
         _dyslexiaFontEnabled,
@@ -75,10 +77,6 @@ class AccessibilityProvider extends ChangeNotifier implements AccessibilityModes
       ].where((enabled) => enabled).length;
 
   // --- Escritura -------------------------------------------------------------
-
-  @override
-  void setTalkBack(bool value) => _update(() => _talkBackEnabled = value,
-      _keyTalkBack, value, SemanticsLabels.talkBack);
 
   @override
   void setBigButtons(bool value) => _update(() => _bigButtonsEnabled = value,
@@ -101,7 +99,6 @@ class AccessibilityProvider extends ChangeNotifier implements AccessibilityModes
 
   /// Desactiva todos los modos y borra las preferencias guardadas.
   void resetAll() {
-    _talkBackEnabled = false;
     _bigButtonsEnabled = false;
     _pictogramsEnabled = false;
     _dyslexiaFontEnabled = false;
@@ -110,7 +107,6 @@ class AccessibilityProvider extends ChangeNotifier implements AccessibilityModes
     final prefs = _preferences;
     if (prefs != null) {
       for (final key in [
-        _keyTalkBack,
         _keyBigButtons,
         _keyPictograms,
         _keyDyslexia,
@@ -129,13 +125,11 @@ class AccessibilityProvider extends ChangeNotifier implements AccessibilityModes
     switch (preset) {
       case AccessibilityPreset.motriz:
         _bigButtonsEnabled = true;
-        _talkBackEnabled = true;
         _pictogramsEnabled = true;
         _dyslexiaFontEnabled = false;
         _highContrastEnabled = true;
         _reduceMotionEnabled = true;
       case AccessibilityPreset.visual:
-        _talkBackEnabled = true;
         _bigButtonsEnabled = true;
         _highContrastEnabled = true;
         _dyslexiaFontEnabled = false;
@@ -145,7 +139,6 @@ class AccessibilityProvider extends ChangeNotifier implements AccessibilityModes
         _pictogramsEnabled = true;
         _dyslexiaFontEnabled = true;
         _reduceMotionEnabled = true;
-        _talkBackEnabled = true;
         _bigButtonsEnabled = true;
         _highContrastEnabled = false;
       case AccessibilityPreset.ninguno:
@@ -163,7 +156,6 @@ class AccessibilityProvider extends ChangeNotifier implements AccessibilityModes
   Future<void> restore() async {
     try {
       final prefs = _preferences ??= await SharedPreferences.getInstance();
-      _talkBackEnabled = prefs.getBool(_keyTalkBack) ?? false;
       _bigButtonsEnabled = prefs.getBool(_keyBigButtons) ?? false;
       _pictogramsEnabled = prefs.getBool(_keyPictograms) ?? false;
       _dyslexiaFontEnabled = prefs.getBool(_keyDyslexia) ?? false;
@@ -203,7 +195,6 @@ class AccessibilityProvider extends ChangeNotifier implements AccessibilityModes
   }
 
   void _persistAll() {
-    _writePref(_keyTalkBack, _talkBackEnabled);
     _writePref(_keyBigButtons, _bigButtonsEnabled);
     _writePref(_keyPictograms, _pictogramsEnabled);
     _writePref(_keyDyslexia, _dyslexiaFontEnabled);
@@ -211,9 +202,13 @@ class AccessibilityProvider extends ChangeNotifier implements AccessibilityModes
     _writePref(_keyReduceMotion, _reduceMotionEnabled);
   }
 
-  /// Anuncia el cambio al lector de pantalla cuando TalkBack está activo.
+  /// Anuncia un cambio al lector de pantalla del sistema.
+  ///
+  /// Se llama siempre, sin condición: si no hay lector activo el anuncio es
+  /// inocuo, y si lo hay el usuario recibe confirmación de cada cambio. No
+  /// depende de ningún interruptor de la app porque TalkBack no es algo que
+  /// Lumina pueda encender.
   void _announce(String message) {
-    if (!_talkBackEnabled) return;
     // `announce` está marcado como deprecado en favor de `sendAnnouncement`,
     // que exige una `FlutterView`. `announce` sigue funcionando y evita
     // tener que resolver la vista desde aquí.
@@ -230,7 +225,6 @@ class AccessibilityProvider extends ChangeNotifier implements AccessibilityModes
   LuminaAccessibilityTheme get themeExtension => LuminaAccessibilityTheme(
         bigButtons: _bigButtonsEnabled,
         pictograms: _pictogramsEnabled,
-        talkBack: _talkBackEnabled,
         reduceMotion: _reduceMotionEnabled,
         letterSpacing: _dyslexiaFontEnabled ? 1.2 : 0.15,
         lineHeight: _dyslexiaFontEnabled ? 1.7 : 0,
@@ -250,8 +244,8 @@ class AccessibilityProvider extends ChangeNotifier implements AccessibilityModes
 
 /// Perfiles de un solo toque, alineados con los tres públicos de Lumina.
 enum AccessibilityPreset {
-  motriz('Motriz', 'Botones grandes, pictogramas, alto contraste y TalkBack'),
-  visual('Visual', 'TalkBack, alto contraste y botones grandes'),
+  motriz('Motriz', 'Botones grandes, pictogramas y alto contraste'),
+  visual('Visual', 'Alto contraste, botones grandes y letras claras'),
   cognitiva(
     'Cognitiva / Sensibilidad',
     'Pictogramas, fuente Andika y sin animaciones',

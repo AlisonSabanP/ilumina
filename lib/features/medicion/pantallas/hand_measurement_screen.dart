@@ -19,7 +19,7 @@ import 'manual_measurement_screen.dart';
 /// `hand_landmarker` es **exclusivo de Android**: su implementación usa un
 /// puente JNI sobre MediaPipe y no tiene equivalente para iOS. Por eso esta
 /// pantalla comprueba la plataforma antes de importar nada del plugin: en iOS
-/// se ofrece directamente la medición AR y la entrada manual, sin intentar
+/// se ofrece directamente la medida a mano, sin intentar
 /// cargar una librería nativa que no existe.
 ///
 /// ## Cómo se obtienen las medidas
@@ -627,8 +627,8 @@ class _UnsupportedPlatformView extends StatelessWidget {
         const SizedBox(height: AppSpacing.lg),
         LuminaInfoBanner(
           message:
-              'En iOS sigue disponible: la medición AR de objetos (ARKit) y la '
-              'entrada manual de medidas.',
+              'La detección de manos solo funciona en Android. En este '
+              'dispositivo puedes introducir las medidas a mano.',
           icon: Icons.info_outline,
         ),
         const SizedBox(height: AppSpacing.xl),

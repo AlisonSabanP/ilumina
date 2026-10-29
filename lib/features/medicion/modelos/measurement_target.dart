@@ -26,8 +26,8 @@ enum MeasurementTarget {
 
 /// Lee y escribe medidas en el destino elegido.
 ///
-/// Se centraliza aquí para que las tres pantallas de medición (AR, mano y
-/// manual) no tengan que saber en qué provider vive cada lista.
+/// Se centraliza aquí para que las pantallas de medición (mano y manual) no
+/// tengan que saber en qué provider vive cada lista.
 abstract final class MeasurementStore {
   /// Medidas guardadas actualmente en [target].
   ///

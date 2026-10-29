@@ -219,7 +219,7 @@ class _ProGripScreenState extends State<ProGripScreen> {
                   isPrimary: false,
                   onPressed: () =>
                       Navigator.of(context).push(MedicionHubScreen.route()),
-                  hint: 'Abre la medición AR, de mano o manual',
+                  hint: 'Abre la medición de mano o la medida a mano',
                 ),
                 SizedBox(height: a11y.controlGap),
                 Text('Material', style: theme.textTheme.labelLarge),

@@ -15,7 +15,7 @@ import '../../orthosnap/modelos/orthosnap_modelos.dart';
 ///   1. Objeto principal (semilla de la recomendación, módulo ProGrip u
 ///      OrthoSnap).
 ///   2. Contexto de la persona (perfil y respuestas del formulario).
-///   3. Medidas reales capturadas (AR, mano o manuales).
+///   3. Medidas reales capturadas (de mano o manuales).
 ///   4. Material y acabado.
 ///   5. Requisitos de impresión y de accesibilidad.
 ///

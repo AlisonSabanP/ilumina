@@ -13,7 +13,6 @@ class LuminaAccessibilityTheme extends ThemeExtension<LuminaAccessibilityTheme> 
   const LuminaAccessibilityTheme({
     required this.bigButtons,
     required this.pictograms,
-    required this.talkBack,
     required this.reduceMotion,
     required this.letterSpacing,
     required this.lineHeight,
@@ -26,9 +25,6 @@ class LuminaAccessibilityTheme extends ThemeExtension<LuminaAccessibilityTheme> 
 
   /// Se dibujan pictogramas grandes junto a cada etiqueta.
   final bool pictograms;
-
-  /// TalkBack activo: se anuncian los cambios de estado y el foco es explícito.
-  final bool talkBack;
 
   /// Sin animaciones.
   final bool reduceMotion;
@@ -49,7 +45,6 @@ class LuminaAccessibilityTheme extends ThemeExtension<LuminaAccessibilityTheme> 
   static const LuminaAccessibilityTheme neutral = LuminaAccessibilityTheme(
     bigButtons: false,
     pictograms: false,
-    talkBack: false,
     reduceMotion: false,
     letterSpacing: 0,
     lineHeight: 0,
@@ -84,7 +79,6 @@ class LuminaAccessibilityTheme extends ThemeExtension<LuminaAccessibilityTheme> 
   LuminaAccessibilityTheme copyWith({
     bool? bigButtons,
     bool? pictograms,
-    bool? talkBack,
     bool? reduceMotion,
     double? letterSpacing,
     double? lineHeight,
@@ -97,7 +91,6 @@ class LuminaAccessibilityTheme extends ThemeExtension<LuminaAccessibilityTheme> 
     return LuminaAccessibilityTheme(
       bigButtons: bigButtons ?? this.bigButtons,
       pictograms: pictograms ?? this.pictograms,
-      talkBack: talkBack ?? this.talkBack,
       reduceMotion: reduceMotion ?? this.reduceMotion,
       letterSpacing: letterSpacing ?? this.letterSpacing,
       lineHeight: lineHeight ?? this.lineHeight,
@@ -119,7 +112,6 @@ class LuminaAccessibilityTheme extends ThemeExtension<LuminaAccessibilityTheme> 
     return LuminaAccessibilityTheme(
       bigButtons: t < 0.5 ? bigButtons : other.bigButtons,
       pictograms: t < 0.5 ? pictograms : other.pictograms,
-      talkBack: t < 0.5 ? talkBack : other.talkBack,
       reduceMotion: t < 0.5 ? reduceMotion : other.reduceMotion,
       letterSpacing: lerpDouble(letterSpacing, other.letterSpacing, t),
       lineHeight: lerpDouble(lineHeight, other.lineHeight, t),

@@ -5,8 +5,6 @@ import '../../../shared/servicios/braille_service.dart';
 import '../../formulario/modelos/formulario_modelos.dart';
 import '../../formulario/modelos/formulario_provider.dart';
 import '../../medicion/modelos/measurement_models.dart';
-import '../../orthosnap/modelos/orthosnap_modelos.dart';
-import '../../progrip/modelos/progrip_modelos.dart';
 import '../../../shared/servicios/stl_builder.dart';
 
 /// Tipo de pieza que sabe construir el generador local.
@@ -16,8 +14,6 @@ import '../../../shared/servicios/stl_builder.dart';
 enum LocalPieceKind {
   braillePlate('Placa Braille'),
   gripSleeve('Engrosador de agarre'),
-  toolAdapter('Adaptador de herramienta'),
-  splint('Férula'),
   tactileTile('Pieza táctil');
 
   const LocalPieceKind(this.label);
@@ -80,6 +76,12 @@ class LocalGeneratorService {
   /// Grosor de pared mínimo, cómodo para boquilla de 0,4 mm sin soportes.
   static const double wallThickness = 2.0;
 
+  /// Id de la recomendación del formulario que pide una etiqueta Braille.
+  ///
+  /// Se compara contra `ToolRecommendation.id`; debe coincidir con el `id` de la
+  /// recomendación de la rama visual en `formulario_modelos.dart`.
+  static const String brailleLabelRecommendationId = 'braille_label';
+
   /// Holgura entre el objeto y el agujero de la pieza, para que entre sin
   /// forzar (0,4 mm es lo habitual en FDM).
   static const double clearance = 0.4;
@@ -120,14 +122,12 @@ class LocalGeneratorService {
       );
     }
 
-    final isBraille =
-        form.profile == NeedProfile.visual || recommendation.id == 'braille_label';
-
-    if (isBraille) {
-      return braillePlate(
-        form.brailleLabel.isEmpty ? recommendation.title : form.brailleLabel,
-        measurements: form.measurements,
-      );
+    // La etiqueta Braille es una pieza **aparte**: nunca se graba sobre otra
+    // pieza. Si el usuario la ha pedido en el formulario (rama visual), aquí se
+    // construye la placa suelta. Para pedirla desde fuera de ese flujo está
+    // `generateBrailleLabel`.
+    if (recommendation.id == brailleLabelRecommendationId) {
+      return braillePlate(form.brailleLabel);
     }
 
     // El resto de ramas producen una pieza de agarre dimensionada con las
@@ -400,15 +400,19 @@ class LocalGeneratorService {
 
     // Garfio de apoyo para quien no puede cerrar todos los dedos: un arco
     // abierto que se engancha con los dedos disponibles.
+    //
+    // El arco **debe solaparse con el tubo**: si se separa de la pared, la
+    // pieza sale como dos sólidos sueltos y el laminador la rechaza (o se
+    // imprime en dos trozos que se caen). Por eso el radio interior es algo
+    // menor que el exterior del tubo, y solo sobresale lo justo para enganchar.
     if (fingerCount <= 3) {
-      final hookRadius = outerRadius + 12;
       mesh.addArcBand(
         cx: 0,
         cy: 0,
         z0: lengthMm - 14,
         z1: lengthMm - 4,
-        outerRadius: hookRadius + wallThickness,
-        innerRadius: hookRadius,
+        outerRadius: outerRadius + 6.0,
+        innerRadius: outerRadius - 1.5,
         startAngle: -math.pi * 0.9,
         endAngle: math.pi * 0.9,
         segments: 40,
@@ -420,10 +424,16 @@ class LocalGeneratorService {
     }
 
     // Apoyo de palma: un bloque redondeado que evita que la muñeca gire.
+    //
+    // La cara interior llega hasta el radio interior del tubo, no hasta el
+    // exterior: así el bloque atraviesa la pared y queda unido a la pieza. Si
+    // solo se apoyara en el exterior, lo tocaría en una arista y no sería un
+    // sólido único. No invade el agujero porque, dentro de ese ancho, cualquier
+    // punto está a radio mayor que el interior.
     if (withPalmRest) {
       mesh.addBox(
         Vec3(-outerRadius * 0.5, -outerRadius - 6, 4),
-        Vec3(outerRadius * 0.5, -outerRadius, 4 + 22),
+        Vec3(outerRadius * 0.5, -innerRadius, 4 + 22),
       );
       notes.add('Incluye un apoyo de palma para no cerrar la mano del todo.');
     }
@@ -447,276 +457,6 @@ class LocalGeneratorService {
         'diámetro del agujero': innerRadius * 2,
         'diámetro exterior': outerRadius * 2,
         'largo': lengthMm,
-      },
-      notes: notes,
-    );
-  }
-
-  // --- Adaptador de herramienta (ProGrip) ------------------------------------
-
-  /// Pieza ProGrip de tres capas: acople, garfio y abrazadera de herramienta.
-  GeneratedMesh toolAdapter(ProGripConfig config) {
-    final notes = <String>[];
-
-    final handleDiameterMm = _findMeasurementMm(
-          config.handMeasurements,
-          const ['diámetro del mango', 'diámetro'],
-        ) ??
-        config.adapter.defaultHandleDiameterMm.toDouble();
-    if (!_hasMeasurement(config.handMeasurements, const ['diámetro'])) {
-      notes.add(
-        'Se ha usado el diámetro habitual de un '
-        '${config.adapter.label.toLowerCase()} '
-        '(${config.adapter.defaultHandleDiameterMm} mm). Mídelo con la cámara '
-        'para que el ajuste sea exacto.',
-      );
-    }
-
-    final mesh = MeshBuilder();
-    final innerRadius = handleDiameterMm / 2 + clearance;
-
-    // Capa 1: acople. La correa o el soporte de palma se resuelven con más
-    // material alrededor del manguito, no con geometría blanda.
-    final baseWall = switch (config.base) {
-      GripBase.standard => 3.0,
-      GripBase.velcro => 3.5,
-      GripBase.palm => 5.0,
-      GripBase.forearm => 4.5,
-    };
-    final outerRadius = innerRadius + baseWall;
-    final lengthMm = config.base == GripBase.forearm ? 120.0 : 85.0;
-
-    mesh.addTubeZ(
-      cx: 0,
-      cy: 0,
-      z0: 0,
-      z1: lengthMm,
-      outerRadius: outerRadius,
-      innerRadius: innerRadius,
-      segments: 72,
-    );
-
-    // Ranuras para la correa, una a cada lado.
-    if (config.base == GripBase.velcro || config.base == GripBase.forearm) {
-      for (final sign in <double>[1, -1]) {
-        mesh.addBox(
-          Vec3(sign * outerRadius - 2, -11, lengthMm * 0.35),
-          Vec3(sign * (outerRadius + 6), 11, lengthMm * 0.35 + 4),
-        );
-      }
-      notes.add('Incluye ranuras de 22 mm para pasar una correa de velcro.');
-    }
-
-    // Capa 2: garfio funcional, en el extremo que queda lejos de la mano.
-    final hookRadius = outerRadius + switch (config.hook) {
-      GripHook.twoFingers => 12.0,
-      GripHook.threeFingers => 17.0,
-      GripHook.curvedHook => 30.0,
-      GripHook.pinch => 14.0,
-      GripHook.thumbRest => 10.0,
-    };
-    final sweep = switch (config.hook) {
-      GripHook.twoFingers => 0.75,
-      GripHook.threeFingers => 0.85,
-      GripHook.curvedHook => 1.35,
-      GripHook.pinch => 0.9,
-      GripHook.thumbRest => 0.6,
-    };
-    mesh.addArcBand(
-      cx: 0,
-      cy: 0,
-      z0: lengthMm - 16,
-      z1: lengthMm - 4,
-      outerRadius: hookRadius + 4,
-      innerRadius: hookRadius,
-      startAngle: -math.pi * sweep,
-      endAngle: math.pi * sweep,
-      segments: 48,
-    );
-    notes.add('Garfio: ${config.hook.label.toLowerCase()}.');
-
-    // Apoyo de pulgar: tope mecánico para trabajos de precisión.
-    if (config.hook == GripHook.thumbRest) {
-      mesh.addBox(
-        Vec3(-8, outerRadius, lengthMm - 30),
-        Vec3(8, outerRadius + 15, lengthMm - 26),
-      );
-    }
-
-    // Capa 3: abrazadera de la herramienta, en el otro extremo.
-    final adapterLengthMm = 34.0;
-    mesh.addTubeZ(
-      cx: 0,
-      cy: 0,
-      z0: -adapterLengthMm,
-      z1: 0,
-      outerRadius: outerRadius + 1.5,
-      innerRadius: innerRadius,
-      segments: 72,
-    );
-    // Pestaña de seguridad: impide que la herramienta se salga al empujar.
-    mesh.addBox(
-      Vec3(-outerRadius, -outerRadius - 5, -adapterLengthMm - 4),
-      Vec3(outerRadius, outerRadius + 5, -adapterLengthMm),
-    );
-    notes.add('Abrazadera para ${config.adapter.label.toLowerCase()} con tope '
-        'de seguridad.');
-
-    notes.add('Se imprime de una sola pieza y sin soportes.');
-    notes.add('Todas las aristas exteriores están redondeadas con chaflán.');
-
-    return GeneratedMesh(
-      stl: mesh.toBinaryStl(header: 'Lumina ProGrip'),
-      glb: mesh.toGlb(name: 'ProGrip'),
-      kind: LocalPieceKind.toolAdapter,
-      summary: 'ProGrip ${config.adapter.label}: manguito de '
-          '${handleDiameterMm.toStringAsFixed(0)} mm con '
-          '${config.hook.label.toLowerCase()}',
-      triangleCount: mesh.triangleCount,
-      dimensionsMm: <String, double>{
-        'diámetro del mango': handleDiameterMm,
-        'largo total': lengthMm + adapterLengthMm,
-      },
-      notes: notes,
-    );
-  }
-
-  // --- Férula (OrthoSnap) ----------------------------------------------------
-
-  /// Férula con estructura de bandas ventiladas y bordes redondeados.
-  ///
-  /// La ventilación se consigue dejando huecos **entre** bandas, en lugar de
-  /// perforar una pared maciza: es geometría válida sin operaciones booleanas,
-  /// y el aire circula igual.
-  GeneratedMesh splint(OrthoSnapRequest request) {
-    final notes = <String>[];
-
-    final perimeterMm = _findMeasurementMm(
-          request.measurements,
-          const [
-            'perímetro de muñeca',
-            'perímetro de antebrazo',
-            'perímetro de brazo',
-            'perímetro de rodilla',
-            'perímetro de muslo',
-            'perímetro de tobillo',
-            'perímetro de cuello',
-            'perímetro',
-          ],
-        ) ??
-        switch (request.bodyZone) {
-          BodyZone.wrist => 170.0,
-          BodyZone.hand => 200.0,
-          BodyZone.elbow => 280.0,
-          BodyZone.knee => 380.0,
-          BodyZone.ankle => 240.0,
-          BodyZone.neck => 380.0,
-        };
-    if (!_hasMeasurement(request.measurements, const ['perímetro'])) {
-      notes.add(
-        'No se tomó el perímetro: se ha usado un valor estándar de '
-        '${perimeterMm.toStringAsFixed(0)} mm para la zona elegida. '
-        'Mídelo para un ajuste clínico.',
-      );
-    }
-
-    final lengthMm = switch (request.bodyZone) {
-      BodyZone.wrist => 90.0,
-      BodyZone.hand => 110.0,
-      BodyZone.elbow => 150.0,
-      BodyZone.knee => 200.0,
-      BodyZone.ankle => 160.0,
-      BodyZone.neck => 120.0,
-    };
-
-    // Radio interior derivado del perímetro: r = P / 2π, con algo de holgura
-    // para que la férula no comprima la piel.
-    final innerRadius = perimeterMm / (2 * math.pi) + 2.0;
-    final wall = request.splintType == SplintType.immobilizer ? 4.0 : 3.0;
-    final outerRadius = innerRadius + wall;
-
-    // Una férula de reposo cubre más circunferencia que una dinámica.
-    final coverage = switch (request.splintType) {
-      SplintType.rest => 0.85,
-      SplintType.functional => 0.75,
-      SplintType.immobilizer => 0.9,
-      SplintType.dynamic => 0.6,
-      SplintType.fingerSeparator => 0.7,
-    };
-
-    final mesh = MeshBuilder();
-    final startAngle = -math.pi * coverage;
-    final endAngle = math.pi * coverage;
-
-    // Bandas horizontales separadas: la ventilación son los huecos entre
-    // bandas, así que no hace falta restar nada.
-    const bandCount = 6;
-    final bandHeight = (lengthMm / bandCount) * 0.62;
-    final pitch = lengthMm / bandCount;
-
-    for (var i = 0; i < bandCount; i++) {
-      final z0 = i * pitch;
-      mesh.addArcBand(
-        cx: 0,
-        cy: 0,
-        z0: z0,
-        z1: z0 + bandHeight,
-        outerRadius: outerRadius,
-        innerRadius: innerRadius,
-        startAngle: startAngle,
-        endAngle: endAngle,
-        segments: 40,
-      );
-    }
-
-    // Costillas longitudinales: unen las bandas y dan rigidez sin cerrar la
-    // ventilación.
-    for (final angle in <double>[-0.55, 0, 0.55]) {
-      final x = math.cos(angle) * (innerRadius + wall / 2);
-      final y = math.sin(angle) * (innerRadius + wall / 2);
-      mesh.addBox(
-        Vec3(x - 3, y - 3, 0),
-        Vec3(x + 3, y + 3, lengthMm),
-      );
-    }
-    notes.add('$bandCount bandas ventiladas unidas por tres costillas.');
-
-    // Separadores de dedos: canales individuales en lugar de un casquete.
-    if (request.splintType == SplintType.fingerSeparator) {
-      for (var i = 0; i < 4; i++) {
-        final offset = (i - 1.5) * 20.0;
-        mesh.addBox(
-          Vec3(offset - 4, innerRadius - 2, 0),
-          Vec3(offset + 4, innerRadius + 12, lengthMm),
-        );
-      }
-      notes.add('Cuatro canales de dedo de 20 mm de separación.');
-    }
-
-    notes.add(
-      'Borde redondeado y superficie interior lisa para evitar puntos de '
-      'presión.',
-    );
-    notes.add(
-      'Estructura abierta y transpirable: no retiene la humedad de la piel.',
-    );
-    notes.add(
-      'Pieza de ayuda al diseño. Debe validarla un profesional sanitario '
-      'antes de usarla en un paciente.',
-    );
-
-    return GeneratedMesh(
-      stl: mesh.toBinaryStl(header: 'Lumina OrthoSnap'),
-      glb: mesh.toGlb(name: 'Férula'),
-      kind: LocalPieceKind.splint,
-      summary:
-          '${request.splintType.label} de ${request.bodyZone.label.toLowerCase()} '
-          'para un perímetro de ${perimeterMm.toStringAsFixed(0)} mm',
-      triangleCount: mesh.triangleCount,
-      dimensionsMm: <String, double>{
-        'perímetro': perimeterMm,
-        'largo': lengthMm,
-        'grosor de pared': wall,
       },
       notes: notes,
     );

@@ -2,22 +2,16 @@ import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 
 import '../../formulario/modelos/formulario_provider.dart';
-import '../../orthosnap/providers/auth_provider.dart';
 import 'measurement_models.dart';
 
 /// Dónde se guardan las medidas que se toman.
 ///
-/// Lumina tiene dos flujos que miden cosas distintas y las guardan en sitios
-/// distintos: el formulario inteligente (diseño personal) y la ficha clínica de
-/// OrthoSnap (paciente de un profesional). Sin esta distinción, medir desde la
-/// ficha clínica guardaba la medida en el formulario y la órtesis se generaba
-/// sin medidas.
+/// Hoy solo hay un destino, el formulario inteligente. El enum se mantiene
+/// porque las pantallas de medición lo reciben como parámetro y así añadir otro
+/// destino (por ejemplo una ficha clínica) no obliga a cambiar sus firmas.
 enum MeasurementTarget {
   /// Formulario inteligente: diseños para uno mismo.
-  formulario('Formulario'),
-
-  /// Ficha clínica de OrthoSnap: medidas del paciente.
-  clinico('Ficha clínica');
+  formulario('Formulario');
 
   const MeasurementTarget(this.label);
 
@@ -37,8 +31,6 @@ abstract final class MeasurementStore {
     return switch (target) {
       MeasurementTarget.formulario =>
         context.watch<FormularioProvider>().measurements,
-      MeasurementTarget.clinico =>
-        context.watch<AuthProvider>().request.measurements,
     };
   }
 
@@ -51,8 +43,6 @@ abstract final class MeasurementStore {
     switch (target) {
       case MeasurementTarget.formulario:
         context.read<FormularioProvider>().upsertMeasurement(measurement);
-      case MeasurementTarget.clinico:
-        context.read<AuthProvider>().addMeasurement(measurement);
     }
   }
 
@@ -61,8 +51,6 @@ abstract final class MeasurementStore {
     switch (target) {
       case MeasurementTarget.formulario:
         context.read<FormularioProvider>().removeMeasurement(id);
-      case MeasurementTarget.clinico:
-        context.read<AuthProvider>().removeMeasurement(id);
     }
   }
 
@@ -71,8 +59,6 @@ abstract final class MeasurementStore {
     switch (target) {
       case MeasurementTarget.formulario:
         context.read<FormularioProvider>().clearMeasurements();
-      case MeasurementTarget.clinico:
-        context.read<AuthProvider>().clearMeasurements();
     }
   }
 }

@@ -1,23 +1,18 @@
 import 'package:flutter/foundation.dart';
 
-import '../../../shared/servicios/braille_service.dart';
 import '../../formulario/modelos/formulario_modelos.dart';
 import '../../formulario/modelos/formulario_provider.dart';
 import '../../medicion/modelos/measurement_models.dart';
-import '../../progrip/modelos/progrip_modelos.dart';
-import '../../orthosnap/modelos/orthosnap_modelos.dart';
 
 /// Servicio que traduce el estado de la app a un prompt enriquecido para Meshy.
 ///
 /// El prompt se compone por capas, siempre en el mismo orden, para que el
 /// resultado sea reproducible y fácil de depurar:
 ///
-///   1. Objeto principal (semilla de la recomendación, módulo ProGrip u
-///      OrthoSnap).
+///   1. Objeto principal (semilla de la recomendación).
 ///   2. Contexto de la persona (perfil y respuestas del formulario).
 ///   3. Medidas reales capturadas (de mano o manuales).
-///   4. Material y acabado.
-///   5. Requisitos de impresión y de accesibilidad.
+///   4. Requisitos de impresión y de accesibilidad.
 ///
 /// Meshy limita el prompt a 800 caracteres: [buildPrompt] recorta de forma
 /// segura en el último punto y avisa con [PromptBuildResult.wasTrimmed].
@@ -41,59 +36,11 @@ class PromptBuilderService {
       _profileContext(form.profile),
       ...form.promptFragments,
       _measurementsBlock(form.measurements),
-      _brailleBlock(form.brailleLabel),
-      _materialBlock(form.material),
       _printingBlock(),
       _accessibilityBlock(form.profile),
     ];
 
     return _assemble(parts, seed: recommendation.promptSeed);
-  }
-
-  /// Prompt para el módulo ProGrip (base + garfio + adaptador).
-  PromptBuildResult fromProGrip(ProGripConfig config) {
-    final parts = <String>[
-      'Custom 3D printable assistive tool grip for a person with limited hand strength',
-      'Three-part design printed as one piece: a mounting base, a functional hook and a tool adapter',
-      'Base: ${config.base.label} (${config.base.description})',
-      'Hook: ${config.hook.label} (${config.hook.description})',
-      'Tool adapter: ${config.adapter.label} for a ${config.adapter.toolName}',
-      ...config.hook.promptFragments,
-      ...config.adapter.promptFragments,
-      if (config.handMeasurements.isNotEmpty)
-        _measurementsBlock(config.handMeasurements),
-      if (config.notes.trim().isNotEmpty) 'Additional requirement: ${config.notes.trim()}',
-      _materialBlock(config.material),
-      _printingBlock(),
-      'All edges must be rounded, the surface smooth on the palm side and textured where the fingers rest',
-      'Include a safety strap hole so the tool cannot be dropped',
-      _brailleBlock('progrip ${config.adapter.label}'),
-    ];
-
-    return _assemble(parts, seed: 'ProGrip assistive tool grip');
-  }
-
-  /// Prompt para el módulo OrthoSnap (órtesis clínica).
-  PromptBuildResult fromOrthoSnap(OrthoSnapRequest request) {
-    final parts = <String>[
-      'Custom 3D printable ${request.splintType.label.toLowerCase()} for the ${request.bodyZone.label.toLowerCase()}',
-      'Clinical orthosis designed by a health professional for a real patient',
-      'Voronoi structure to reduce weight while keeping mechanical strength',
-      'Breathable open-cell lattice so the skin stays dry',
-      'High precision fit, smooth inner surface with no pressure points',
-      'Semi-rigid material that supports the joint but allows controlled movement',
-      if (request.diagnosis.trim().isNotEmpty)
-        'Clinical indication: ${request.diagnosis.trim()}',
-      if (request.affectedSide != null) 'Affected side: ${request.affectedSide}',
-      if (request.notes.trim().isNotEmpty) 'Professional notes: ${request.notes.trim()}',
-      if (request.measurements.isNotEmpty)
-        _measurementsBlock(request.measurements),
-      _materialBlock(request.material),
-      _printingBlock(),
-      'Include ventilation openings of at least 4 mm and rounded borders for skin comfort',
-    ];
-
-    return _assemble(parts, seed: 'OrthoSnap clinical orthosis');
   }
 
   // --- Bloques ---------------------------------------------------------------
@@ -114,26 +61,6 @@ class PromptBuilderService {
     }
     final phrases = measurements.map((m) => m.promptPhrase).join('. ');
     return 'Real measurements of the user: $phrases';
-  }
-
-  /// Bloque que pide grabar la etiqueta Braille en la propia pieza.
-  ///
-  /// Meshy trabaja con texto en inglés y no puede generar puntos Braille a
-  /// partir de los caracteres Unicode, así que la instrucción es geométrica:
-  /// relieve de 1,5 mm de alto y 2,5 mm entre puntos, que son las medidas que
-  /// hacen legible una etiqueta impresa con el dedo.
-  String _brailleBlock(String? label) {
-    final text = label == null ? '' : BrailleService.prepareLabel(label);
-    if (text.isEmpty) return '';
-    return 'Emboss a Braille label directly on the surface of the part, '
-        'reading "$text", with raised dots 1.5 mm high and 2.5 mm apart, '
-        'in a recessed flat area so the dots are not worn down in use';
-  }
-
-  String _materialBlock(String material) {
-    final hint = MaterialQuestion.promptHints[material] ??
-        'Smooth durable surface suitable for daily use';
-    return 'Print material: $material. $hint';
   }
 
   String _printingBlock() =>

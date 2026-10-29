@@ -196,7 +196,7 @@ class LuminaSectionCard extends StatelessWidget {
 
 /// Opción seleccionable con pictograma grande opcional.
 ///
-/// Se usa en el formulario y en los módulos ProGrip/OrthoSnap. En modo
+/// Se usa en el formulario y en los módulos de generación. En modo
 /// pictogramas la altura crece para dar cabida al icono de 56 dp.
 class PictogramOptionTile extends StatelessWidget {
   const PictogramOptionTile({

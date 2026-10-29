@@ -9,15 +9,13 @@ import '../../accesibilidad/widgets/accessibility_fab.dart';
 import '../../formulario/modelos/formulario_provider.dart';
 import '../../formulario/pantallas/formulario_screen.dart';
 import '../../generacion3d/providers/generation_provider.dart';
-import '../../orthosnap/pantallas/orthosnap_login_screen.dart';
-import '../../progrip/pantallas/progrip_screen.dart';
 import '../../visor3d/pantallas/visor_modelo_screen.dart';
 
 /// Pantalla de inicio: punto de entrada único a todos los módulos.
 ///
 /// Está pensada para que la primera decisión sea siempre la misma y esté
 /// siempre en el mismo sitio: "¿qué necesito?". El estado de accesibilidad está
-/// arriba, seguido de los accesos a los módulos profesionales y al historial.
+/// arriba, seguido del acceso al formulario y del historial de modelos.
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -99,34 +97,6 @@ class HomeScreen extends StatelessWidget {
             icon: Icons.assignment,
             onOpen: () => Navigator.of(context).push(FormularioScreen.route()),
             highlight: true,
-          ),
-
-          const SizedBox(height: AppSpacing.xl),
-
-          const _SectionTitle(
-            title: 'Módulos profesionales',
-            subtitle: 'Herramientas especializadas para oficios y clínica.',
-          ),
-          _ModuleCard(
-            title: 'ProGrip',
-            description:
-                'Prótesis y adaptadores para trabajar: base, garfio y adaptador '
-                'de herramienta.',
-            icon: Icons.handyman,
-            accent: theme.colorScheme.primary,
-            onOpen: () => Navigator.of(context).push(ProGripScreen.route()),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _ModuleCard(
-            title: 'OrthoSnap',
-            description:
-                'Órtesis clínicas personalizadas. Acceso restringido a '
-                'profesionales sanitarios.',
-            icon: Icons.medical_services_outlined,
-            accent: theme.colorScheme.secondary,
-            badge: 'Acceso restringido',
-            onOpen: () =>
-                Navigator.of(context).push(OrthoSnapLoginScreen.route()),
           ),
 
           if (generation.history.isNotEmpty) ...[
@@ -299,8 +269,6 @@ class _ModuleCard extends StatelessWidget {
     required this.description,
     required this.icon,
     required this.onOpen,
-    this.accent,
-    this.badge,
     this.highlight = false,
   });
 
@@ -308,15 +276,12 @@ class _ModuleCard extends StatelessWidget {
   final String description;
   final IconData icon;
   final VoidCallback onOpen;
-  final Color? accent;
-  final String? badge;
   final bool highlight;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final a11y = AccessibilityProvider.of(context);
-    final color = accent ?? theme.colorScheme.primary;
 
     return Semantics(
       button: true,
@@ -339,39 +304,14 @@ class _ModuleCard extends StatelessWidget {
                   size: a11y.pictograms
                       ? a11y.pictogramSize
                       : a11y.iconSize * 1.5,
-                  color: color,
+                  color: theme.colorScheme.primary,
                 ),
                 SizedBox(width: a11y.controlGap),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child:
-                                Text(title, style: theme.textTheme.titleMedium),
-                          ),
-                          if (badge != null)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: AppSpacing.sm,
-                                vertical: AppSpacing.xxs,
-                              ),
-                              decoration: BoxDecoration(
-                                color: color.withValues(alpha: 0.15),
-                                borderRadius:
-                                    BorderRadius.circular(AppRadius.pill),
-                              ),
-                              child: Text(
-                                badge!,
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: color,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
+                      Text(title, style: theme.textTheme.titleMedium),
                       const SizedBox(height: AppSpacing.xxs),
                       Text(
                         description,

@@ -220,7 +220,6 @@ class GeneratedModel {
     this.thumbnailUrl,
     this.taskId,
     this.createdAt,
-    this.material,
     this.isLocal = false,
     this.pieceSummary,
     this.pieceNotes = const <String>[],
@@ -247,7 +246,6 @@ class GeneratedModel {
   final String? thumbnailUrl;
   final String? taskId;
   final DateTime? createdAt;
-  final String? material;
 
   /// `true` si la pieza la ha construido Lumina en el dispositivo, sin red.
   final bool isLocal;
@@ -279,7 +277,6 @@ class GeneratedModel {
         thumbnailUrl: thumbnailUrl,
         taskId: taskId,
         createdAt: createdAt,
-        material: material,
         isLocal: isLocal,
         pieceSummary: pieceSummary,
         pieceNotes: pieceNotes,
@@ -297,7 +294,6 @@ class GeneratedModel {
         'thumbnailUrl': thumbnailUrl,
         'taskId': taskId,
         'createdAt': createdAt?.toIso8601String(),
-        'material': material,
         'isLocal': isLocal,
         'pieceSummary': pieceSummary,
         'pieceNotes': pieceNotes,
@@ -315,7 +311,6 @@ class GeneratedModel {
         thumbnailUrl: json['thumbnailUrl'] as String?,
         taskId: json['taskId'] as String?,
         createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
-        material: json['material'] as String?,
         isLocal: json['isLocal'] as bool? ?? false,
         pieceSummary: json['pieceSummary'] as String?,
         pieceNotes: (json['pieceNotes'] as List?)?.whereType<String>().toList() ??

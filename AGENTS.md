@@ -9,28 +9,32 @@ saber para trabajar en el código sin romperlo.
 ```bash
 flutter pub get
 flutter analyze          # debe quedar en "No issues found!"
-flutter test             # 32 pruebas, todas deben pasar
+flutter test             # 35 pruebas, todas deben pasar
 flutter build apk --debug
 flutter build apk --release   # ~5 min; R8 tarda
 ```
 
+`test/app_boot_test.dart` monta `LuminaRoot` entero (providers + panel +
+formulario) y es el que detecta roturas de cableado; `test/widget_test.dart`
+prueba unidades y pantallas sueltas.
+
 Para probar en un móvil concreto, compila solo su arquitectura: el APK de debug
-pasa de 233 MiB a ~62 MiB y evita los fallos de instalación por falta de
+pasa de ~203 MiB a ~133 MiB y evita los fallos de instalación por falta de
 espacio.
 
 ```bash
 flutter run --target-platform android-arm64
 ```
 
-Android necesita JDK 17, Android SDK 36 y NDK 28.2.13676358.
+Android necesita JDK 17 o superior, Android SDK 36 y NDK 28.2.13676358.
 `android/gradle.properties` usa `-Xmx4G`: subirlo provoca que el runtime se
 quede sin memoria al compilar MediaPipe junto con el WebView de `power3d`.
 
 ## Arquitectura
 
-- **Estado:** `provider` con cinco `ChangeNotifier` en `lib/app/app.dart`
-  (`AccessibilityProvider`, `FormularioProvider`, `ProGripProvider`,
-  `AuthProvider`, `GenerationProvider`). No se usa Riverpod a propósito.
+- **Estado:** `provider` con tres `ChangeNotifier` en `lib/app/app.dart`
+  (`AccessibilityProvider`, `FormularioProvider`, `GenerationProvider`). No se
+  usa Riverpod a propósito.
 - **Aislamiento por feature:** cada módulo vive en `lib/features/<nombre>/` con
   `modelos/`, `pantallas/`, `providers/`, `servicios/`, `widgets/` según haga
   falta. Nada de un módulo importa pantallas de otro salvo por navegación.
@@ -78,13 +82,52 @@ la normalización deja la cadena vacía, la vista previa **no** debe llamar a
 etiqueta "no funcionaba"). `braille_screen.dart` comprueba
 `_hasPrintableLabel` antes de dibujar.
 
-## TalkBack no es un interruptor de la app
+## Las piezas se construyen Z-arriba y el GLB sale Y-arriba
+
+`MeshBuilder` construye con el eje **Z** como altura (`addTubeZ`, `addBox` con
+`z0`/`z1`), pero glTF —y por tanto `power3d`— es **Y-arriba**. `toGlb()` hace la
+conversión de ejes al escribir posiciones y normales. Si se quita, las piezas
+altas y estrechas (el engrosador) llegan al visor tumbadas y de frente se ven
+como un **círculo**. Hay una prueba de regresión: "el GLB sale Y-arriba".
+
+## Las piezas deben ser un solo sólido
+
+Las piezas paramétricas se montan por unión de volúmenes, y **cada volumen tiene
+que solaparse con el que toca**: si dos volúmenes solo se tocan en una arista o
+cara, el laminador ve dos sólidos sueltos. Por eso el garfio del engrosador
+arranca en `outerRadius - 1.5` (dentro de la pared) y el apoyo de palma llega
+hasta `-innerRadius` (atraviesa el tubo), en lugar de apoyarse en el exterior.
+
+## La etiqueta Braille es una pieza aparte
+
+La etiqueta **nunca se graba sobre otra pieza**. Se construye en dos sitios, y
+los dos producen la misma placa suelta:
+
+- `LocalGeneratorService.fromFormulario` la devuelve cuando la recomendación es
+  `brailleLabelRecommendationId` (rama visual del formulario).
+- `GenerationProvider.generateBrailleLabel` la construye a petición desde
+  `braille_screen.dart`.
+
+`FormularioProvider.brailleLabel` es solo el texto sugerido. No enganches la
+etiqueta a la generación de una pieza de agarre: eso era el comportamiento
+antiguo.
+
+## El material de impresión no se elige
+
+Se retiró el selector de material (PETG/PLA/TPU/ASA) del formulario y el campo
+`material` de `GeneratedModel`. El usuario final no debe decidir el filamento:
+el laminador lo hace por él. No lo reintroduzcas en el formulario ni en el
+prompt.
+
+## El lector de pantalla no es un interruptor de la app
 
 No existe (ni debe existir) un `setTalkBack`: TalkBack y VoiceOver son lectores
 del sistema y solo se activan desde los ajustes del móvil. Lo que Lumina
-garantiza es que todos sus widgets tengan `Semantics` correctos. El panel de
-accesibilidad lo explica en una tarjeta informativa. No reintroduzcas un
-interruptor que no puede cumplir lo que promete.
+garantiza es que todos sus widgets tengan `Semantics` correctos. **No se le
+dedica una tarjeta informativa en el panel**: se retiró a petición del usuario,
+que no quiere ver TalkBack en la información de accesibilidad de la app. No
+reintroduzcas ni la tarjeta ni un interruptor que no puede cumplir lo que
+promete.
 
 ## El panel de accesibilidad está en español a propósito
 
@@ -130,8 +173,8 @@ Hubo uno y se quitó. Hacía daño de dos formas:
 
    | Artefacto | Tamaño | ABI incluidas |
    | --- | --- | --- |
-   | `app-debug.apk` | 233 MiB | arm64-v8a, armeabi-v7a, **x86_64** |
-   | `app-release.apk` | 97 MiB | arm64-v8a, armeabi-v7a, **x86_64** |
+   | `app-debug.apk` | 202.8 MiB | arm64-v8a, armeabi-v7a, **x86_64** |
+   | `app-release.apk` | 97.2 MiB | arm64-v8a, armeabi-v7a, **x86_64** |
 
 2. **Rompe `--split-per-abi`.** Gradle aborta con:
 
@@ -146,11 +189,11 @@ Hubo uno y se quitó. Hacía daño de dos formas:
 La forma correcta de elegir arquitecturas es la línea de comandos:
 
 ```bash
-flutter build apk --release --split-per-abi    # un APK por ABI (~28 MiB arm64)
-flutter run --target-platform android-arm64    # un solo APK (~62 MiB debug)
+flutter build apk --release --split-per-abi    # un APK por ABI (arm64 ~42 MiB)
+flutter run --target-platform android-arm64    # un solo APK (~133 MiB debug)
 ```
 
-Un APK de debug de 233 MiB es además la causa más común de
+Un APK de debug de ~203 MiB es además la causa más común de
 `adb: failed to install` (falta de espacio en el móvil). Ver los errores
 probables del README.
 
@@ -197,3 +240,20 @@ hardware real y no se puede comprobar con `flutter test`:
   emulador; en `flutter test` no se puede montar.
 - El trazo del Braille en pantalla: la fuente ya está declarada y los tests
   cubren la conversión, pero el render final conviene verlo en el móvil.
+
+## Verificado en este entorno (no lo repitas a ciegas)
+
+`flutter analyze` (`No issues found!`), `flutter test` (35/35) y las cuatro
+compilaciones de Android (`--debug`, `--release`, `--release --split-per-abi`,
+`--debug --target-platform android-arm64`) están **ejecutadas**, no estimadas.
+Requiere JDK 17 o superior: AGP 9 no arranca con JDK 11 y en Debian 13 solo hay
+`openjdk-21-jdk-headless` en apt, así que compilando con Java 21 a bytecode 17
+(`sourceCompatibility`/`jvmTarget` siguen en `VERSION_17`).
+
+El primer `flutter build apk` en una máquina limpia tarda mucho más de lo que
+sugiere el README: Gradle descarga el wrapper 9.3.1, AGP, CMake 3.22.1 y el
+NDK 28.2.13676358. En este entorno fueron ~4 min el primer debug y ~2 min el
+release ya en caliente. No es que el build se haya colgado.
+
+Lo que **no** se puede verificar aquí: iOS (necesita macOS y Xcode) y todo lo
+que dependa de cámara, WebView o vibración reales. No lo marques como probado.

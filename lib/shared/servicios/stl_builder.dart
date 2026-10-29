@@ -338,12 +338,21 @@ class MeshBuilder {
       for (var v = 0; v < 3; v++) {
         final vertex = v == 0 ? a : (v == 1 ? b : c);
         final offset = (t * 3 + v) * 3;
+        // Las piezas se construyen con el eje Z hacia arriba (es el eje de
+        // extrusión de los laminadores), pero glTF es Y-arriba. Sin esta
+        // conversión el modelo sale tumbado y, mirado de frente, un tubo se ve
+        // como un círculo: era exactamente el "círculo raro" del visor.
+        //
+        // La conversión (x, y, z) -> (x, z, -y) es una rotación propia
+        // (determinante +1), así que no invierte las normales ni el orden de
+        // los vértices: no hay que reordenar triángulos ni dar la vuelta a las
+        // caras.
         positions[offset] = vertex.x;
-        positions[offset + 1] = vertex.y;
-        positions[offset + 2] = vertex.z;
+        positions[offset + 1] = vertex.z;
+        positions[offset + 2] = -vertex.y;
         normals[offset] = normal.x;
-        normals[offset + 1] = normal.y;
-        normals[offset + 2] = normal.z;
+        normals[offset + 1] = normal.z;
+        normals[offset + 2] = -normal.y;
       }
     }
 

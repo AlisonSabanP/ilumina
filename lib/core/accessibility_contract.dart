@@ -1,12 +1,12 @@
 /// Contrato de los modos de accesibilidad que Lumina controla y aplica.
 ///
 /// `accessibility_widget` gestiona las preferencias visuales/lectura
-/// (dislexia, contraste, saturación, guía de lectura...). Lumina añade encima
+/// (dislexia, contraste, saturación, espaciados...). Lumina añade encima
 /// los modos propios de la app: botones grandes y pictogramas.
 ///
-/// TalkBack/VoiceOver **no aparece aquí a propósito**: es un lector de pantalla
-/// del sistema y solo se activa desde los ajustes del dispositivo. Lo que
-/// Lumina garantiza es que sus widgets estén bien etiquetados con `Semantics`.
+/// Los lectores de pantalla del sistema **no aparecen aquí a propósito**: se
+/// activan desde los ajustes del dispositivo, no desde la app. Lo que Lumina
+/// garantiza es que sus widgets estén bien etiquetados con `Semantics`.
 abstract interface class AccessibilityModes {
   bool get bigButtonsEnabled;
   bool get pictogramsEnabled;

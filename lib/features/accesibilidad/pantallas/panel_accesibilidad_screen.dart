@@ -14,8 +14,12 @@ import '../providers/accessibility_provider.dart';
 ///     alto contraste, reducir movimiento), gestionados por
 ///     [AccessibilityProvider].
 ///  2. Los controles WCAG que aporta `accessibility_widget` (escala de texto,
-///     negrita, espaciados, saturación, guía de lectura...), servidos por su
-///     controlador.
+///     negrita, espaciados, saturación...), servidos por su controlador.
+///
+/// Se han retirado los controles "Invertir colores" y "Guía de lectura": el
+/// paquete los guardaba pero no los aplicaba al árbol de widgets, así que el
+/// interruptor no cambiaba nada. Se prefirió quitarlos antes que dejar un
+/// control que no hace lo que promete.
 ///
 /// **Los controles se dibujan aquí, en español, en lugar de usar el
 /// `AccessibilityPanelContent` del paquete**: ese widget trae los textos fijos
@@ -211,10 +215,6 @@ class _PanelAccesibilidadScreenState extends State<PanelAccesibilidadScreen> {
                 ),
                 const SizedBox(height: AppSpacing.lg),
 
-                // --- Lector de pantalla del sistema ---
-                const _ScreenReaderCard(),
-                const SizedBox(height: AppSpacing.lg),
-
                 LuminaSectionCard(
                   title: 'Modos de Lumina',
                   subtitle: 'Se aplican en todas las pantallas.',
@@ -278,7 +278,7 @@ class _PanelAccesibilidadScreenState extends State<PanelAccesibilidadScreen> {
                 // --- Texto y lectura ---
                 LuminaSectionCard(
                   title: 'Texto y lectura',
-                  subtitle: 'Ajustes de tipografía y guía de lectura.',
+                  subtitle: 'Ajustes de tipografía: tamaño, negrita y espaciados.',
                   leadingIcon: Icons.text_fields,
                   child: Column(
                     children: [
@@ -327,16 +327,6 @@ class _PanelAccesibilidadScreenState extends State<PanelAccesibilidadScreen> {
                           (s) => s.copyWith(letterSpacing: value),
                         ),
                       ),
-                      _ModeSwitch(
-                        title: 'Guía de lectura',
-                        description:
-                            'Resalta la línea que estás leyendo con una banda horizontal.',
-                        value: settings.readingGuide,
-                        onChanged: (value) => _updateWcag(
-                          (s) => s.copyWith(readingGuide: value),
-                        ),
-                        icon: Icons.horizontal_rule,
-                      ),
                     ],
                   ),
                 ),
@@ -349,15 +339,6 @@ class _PanelAccesibilidadScreenState extends State<PanelAccesibilidadScreen> {
                   leadingIcon: Icons.palette_outlined,
                   child: Column(
                     children: [
-                      _ModeSwitch(
-                        title: 'Invertir colores',
-                        description: 'Invierte los colores de la aplicación.',
-                        value: settings.invertColors,
-                        onChanged: (value) => _updateWcag(
-                          (s) => s.copyWith(invertColors: value),
-                        ),
-                        icon: Icons.invert_colors,
-                      ),
                       _SliderTile(
                         title: 'Saturación del color',
                         description:
@@ -484,51 +465,6 @@ class _PanelAccesibilidadScreenState extends State<PanelAccesibilidadScreen> {
         AccessibilityPreset.cognitiva => Icons.psychology_alt,
         AccessibilityPreset.ninguno => Icons.restart_alt,
       };
-}
-
-/// Explica cómo activar el lector de pantalla del sistema.
-///
-/// Se ofrece como información y no como interruptor porque TalkBack y
-/// VoiceOver se encienden desde los ajustes del móvil: una app no puede
-/// activarlos. Prometer un botón que no funciona sería peor que no tenerlo, así
-/// que aquí se explica la ruta exacta.
-class _ScreenReaderCard extends StatelessWidget {
-  const _ScreenReaderCard();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return LuminaSectionCard(
-      title: 'Lector de pantalla (TalkBack / VoiceOver)',
-      subtitle:
-          'TalkBack y VoiceOver son lectores del sistema: se activan en los ajustes del teléfono, no dentro de la app.',
-      leadingIcon: Icons.record_voice_over,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Lumina ya está preparada: todos sus botones, campos y avisos tienen '
-            'descripción y orden de lectura, así que funcionan en cuanto actives '
-            'el lector.',
-            style: theme.textTheme.bodyMedium,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text('En Android', style: theme.textTheme.labelLarge),
-          Text(
-            'Ajustes → Accesibilidad → TalkBack → Usar TalkBack.',
-            style: theme.textTheme.bodySmall,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text('En iPhone', style: theme.textTheme.labelLarge),
-          Text(
-            'Ajustes → Accesibilidad → VoiceOver → activar.',
-            style: theme.textTheme.bodySmall,
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 /// Interruptor con etiqueta, descripción y pictograma opcional.

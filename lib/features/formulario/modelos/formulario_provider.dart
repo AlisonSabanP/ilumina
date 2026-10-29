@@ -14,7 +14,6 @@ class FormularioProvider extends ChangeNotifier {
   final Map<String, String> _answers = <String, String>{};
   final List<String> _history = <String>[];
   String? _currentQuestionId;
-  String _material = FormTree.defaultMaterial;
   ToolRecommendation? _recommendation;
   final List<Measurement> _measurements = <Measurement>[];
   String _brailleText = '';
@@ -31,8 +30,6 @@ class FormularioProvider extends ChangeNotifier {
 
   FormQuestion? get currentQuestion => FormTree.question(_currentQuestionId);
 
-  String get material => _material;
-
   /// Recomendación final. Solo es no nula al terminar el flujo.
   ToolRecommendation? get recommendation => _recommendation;
 
@@ -40,12 +37,12 @@ class FormularioProvider extends ChangeNotifier {
 
   String get brailleText => _brailleText;
 
-  /// Etiqueta Braille efectiva que se grabará en la pieza.
+  /// Texto sugerido para la etiqueta Braille.
   ///
-  /// Si el usuario no ha escrito nada, se genera sola a partir de la
-  /// recomendación ("Adaptador ProGrip para sierra" -> "adaptador progrip para
-  /// sierra"). Así toda pieza sale etiquetada sin trabajo extra, que es lo que
-  /// necesita alguien que no ve el objeto.
+  /// Si el usuario no ha escrito nada, se propone uno a partir del título de la
+  /// recomendación ("Adaptador para sierra" -> "adaptador para sierra"). Es
+  /// solo una **sugerencia editable**: la etiqueta es una pieza aparte y no se
+  /// genera si el usuario no la pide.
   String get brailleLabel {
     if (_brailleText.trim().isNotEmpty) {
       return BrailleService.prepareLabel(_brailleText);
@@ -105,10 +102,6 @@ class FormularioProvider extends ChangeNotifier {
       _finished = true;
     } else {
       _currentQuestionId = option.nextQuestionId;
-      // Materiales sugeridos por la opción, si los hay.
-      if (option.materialHint != null) {
-        _material = option.materialHint!;
-      }
     }
     notifyListeners();
   }
@@ -138,7 +131,6 @@ class FormularioProvider extends ChangeNotifier {
     _answers.clear();
     _history.clear();
     _currentQuestionId = null;
-    _material = FormTree.defaultMaterial;
     _recommendation = null;
     _measurements.clear();
     _brailleText = '';
@@ -146,13 +138,7 @@ class FormularioProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // --- Material y braille ----------------------------------------------------
-
-  void setMaterial(String material) {
-    if (_material == material) return;
-    _material = material;
-    notifyListeners();
-  }
+  // --- Braille ---------------------------------------------------------------
 
   void setBrailleText(String text) {
     if (_brailleText == text) return;
@@ -226,7 +212,6 @@ class FormularioProvider extends ChangeNotifier {
       final label = answerLabel(entry.key);
       if (label != null) buffer.write(' · $label');
     }
-    buffer.write(' · $material');
     return buffer.toString();
   }
 }

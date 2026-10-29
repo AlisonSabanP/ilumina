@@ -42,7 +42,6 @@ class FormOption {
     this.nextQuestionId,
     this.recommendation,
     this.promptFragments = const <String>[],
-    this.materialHint,
     this.suggestedMeasurements = const <String>[],
   }) : assert(
           nextQuestionId != null || recommendation != null,
@@ -62,9 +61,6 @@ class FormOption {
 
   /// Frases que se añadirán al prompt de Meshy.
   final List<String> promptFragments;
-
-  /// Material sugerido para esta elección (se puede cambiar después).
-  final String? materialHint;
 
   /// Medidas que conviene capturar para esta opción.
   final List<String> suggestedMeasurements;
@@ -128,9 +124,6 @@ abstract final class FormTree {
 
   static FormQuestion? question(String? id) => id == null ? null : _all[id];
 
-  /// Material por defecto cuando el usuario no elige ninguno.
-  static const String defaultMaterial = 'PETG';
-
   static const Map<String, FormQuestion> _all = <String, FormQuestion>{
     // ======================= RAMA MOTRIZ =======================
     'm_need': FormQuestion(
@@ -187,10 +180,10 @@ abstract final class FormTree {
           label: 'Martillo',
           pictogram: Icons.hardware,
           recommendation: ToolRecommendation(
-            id: 'progrip_martillo',
-            title: 'Adaptador ProGrip para martillo',
+            id: 'grip_martillo',
+            title: 'Adaptador de agarre para martillo',
             description:
-                'Base de acople + garfio de dos dedos + adaptador de martillo, impreso en una sola pieza.',
+                'Manguito de agarre con garfio de dos dedos que fija el martillo a la mano.',
             icon: Icons.hardware,
             promptSeed:
                 'Custom 3D printable tool adapter for a hammer for a person with limited grip strength',
@@ -205,10 +198,10 @@ abstract final class FormTree {
           label: 'Destornillador',
           pictogram: Icons.rotate_right,
           recommendation: ToolRecommendation(
-            id: 'progrip_destornillador',
-            title: 'Adaptador ProGrip para destornillador',
+            id: 'grip_destornillador',
+            title: 'Adaptador de agarre para destornillador',
             description:
-                'Garfio de pinza de presión que mantiene el destornillador alineado con el antebrazo.',
+                'Garfio de pinza que mantiene el destornillador alineado con el antebrazo.',
             icon: Icons.rotate_right,
             promptSeed:
                 'Custom 3D printable tool adapter for a screwdriver for a person with limited grip strength',
@@ -223,8 +216,8 @@ abstract final class FormTree {
           label: 'Sierra',
           pictogram: Icons.content_cut,
           recommendation: ToolRecommendation(
-            id: 'progrip_sierra',
-            title: 'Adaptador ProGrip para sierra',
+            id: 'grip_sierra',
+            title: 'Adaptador de agarre para sierra',
             description:
                 'Garfio curvo con tope de seguridad para evitar que la sierra se suelte durante el corte.',
             icon: Icons.content_cut,
@@ -241,8 +234,8 @@ abstract final class FormTree {
           label: 'Cuchillo',
           pictogram: Icons.cut,
           recommendation: ToolRecommendation(
-            id: 'progrip_cuchillo',
-            title: 'Adaptador ProGrip para cuchillo',
+            id: 'grip_cuchillo',
+            title: 'Adaptador de agarre para cuchillo',
             description:
                 'Garfio de gancho curvo con protección de dedos para cortar sin cerrar la mano.',
             icon: Icons.cut,
@@ -259,8 +252,8 @@ abstract final class FormTree {
           label: 'Tijeras',
           pictogram: Icons.content_cut_outlined,
           recommendation: ToolRecommendation(
-            id: 'progrip_tijeras',
-            title: 'Adaptador ProGrip para tijeras',
+            id: 'grip_tijeras',
+            title: 'Adaptador de agarre para tijeras',
             description:
                 'Palanca que permite accionar las tijeras con la palma en lugar de los dedos.',
             icon: Icons.content_cut_outlined,
@@ -277,8 +270,8 @@ abstract final class FormTree {
           label: 'Pincel',
           pictogram: Icons.brush,
           recommendation: ToolRecommendation(
-            id: 'progrip_pincel',
-            title: 'Adaptador ProGrip para pincel',
+            id: 'grip_pincel',
+            title: 'Adaptador de agarre para pincel',
             description:
                 'Manguito ergonómico que fija el pincel a la mano con una correa suave.',
             icon: Icons.brush,
@@ -295,8 +288,8 @@ abstract final class FormTree {
           label: 'Rastrillo',
           pictogram: Icons.grass,
           recommendation: ToolRecommendation(
-            id: 'progrip_rastrillo',
-            title: 'Adaptador ProGrip para rastrillo',
+            id: 'grip_rastrillo',
+            title: 'Adaptador de agarre para rastrillo',
             description:
                 'Acople en D que permite tirar del rastrillo con el antebrazo en lugar de la mano.',
             icon: Icons.grass,
@@ -720,29 +713,5 @@ abstract final class FormTree {
         ),
       ],
     ),
-  };
-}
-
-/// Pregunta final común a todas las ramas: el material de impresión.
-///
-/// Se mantiene fuera del mapa ramificado para reutilizarla en todos los flujos.
-abstract final class MaterialQuestion {
-  static const String id = 'material';
-
-  static const List<String> options = <String>['PETG', 'PLA', 'TPU', 'ASA'];
-
-  static const Map<String, String> descriptions = <String, String>{
-    'PETG': 'Resistente y ligeramente flexible. Ideal para herramientas y uso diario.',
-    'PLA': 'Rígido y fácil de imprimir. Bueno para prototipos y etiquetas.',
-    'TPU': 'Flexible y antideslizante. Ideal para agarres y amortiguación.',
-    'ASA': 'Resistente al sol y al calor. Para uso en exterior.',
-  };
-
-  /// Descripción orientativa que se añade al prompt de Meshy.
-  static const Map<String, String> promptHints = <String, String>{
-    'PETG': 'Smooth durable PETG surface, impact resistant',
-    'PLA': 'Rigid PLA surface, easy to print, good for a first prototype',
-    'TPU': 'Soft flexible TPU surface, non-slip and comfortable to grip',
-    'ASA': 'Weather resistant ASA surface for outdoor use',
   };
 }

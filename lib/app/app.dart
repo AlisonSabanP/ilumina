@@ -8,8 +8,6 @@ import '../features/accesibilidad/providers/accessibility_provider.dart';
 import '../features/formulario/modelos/formulario_provider.dart';
 import '../features/generacion3d/providers/generation_provider.dart';
 import '../features/home/pantallas/home_screen.dart';
-import '../features/orthosnap/providers/auth_provider.dart';
-import '../features/progrip/providers/progrip_provider.dart';
 
 /// Raíz de la aplicación.
 ///
@@ -190,8 +188,7 @@ class _AccessibilitySyncState extends State<_AccessibilitySync> {
 /// Raíz del árbol de providers y de la aplicación.
 ///
 /// Se registran todos en la raíz porque varios módulos comparten estado: el
-/// formulario alimenta la generación, la generación alimenta el visor, y
-/// ProGrip y OrthoSnap escriben en el mismo estado de generación.
+/// formulario alimenta la generación y la generación alimenta el visor.
 class LuminaRoot extends StatelessWidget {
   const LuminaRoot({super.key});
 
@@ -204,12 +201,6 @@ class LuminaRoot extends StatelessWidget {
         ),
         ChangeNotifierProvider<FormularioProvider>(
           create: (_) => FormularioProvider(),
-        ),
-        ChangeNotifierProvider<ProGripProvider>(
-          create: (_) => ProGripProvider(),
-        ),
-        ChangeNotifierProvider<AuthProvider>(
-          create: (_) => AuthProvider(),
         ),
         ChangeNotifierProvider<GenerationProvider>(
           create: (_) => GenerationProvider()..restoreHistory(),

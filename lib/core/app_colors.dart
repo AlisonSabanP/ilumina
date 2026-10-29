@@ -36,8 +36,4 @@ abstract final class AppColors {
   static const Color hcWhite = Color(0xFFFFFFFF);
   static const Color hcBlue = Color(0xFF00306B);
   static const Color hcPurple = Color(0xFF3B1E6E);
-
-  // --- Semántica de los módulos ---
-  static const Color progrip = Color(0xFF2C5F8A);
-  static const Color orthosnap = Color(0xFF6B4C9A);
 }

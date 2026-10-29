@@ -9,8 +9,6 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../../core/env.dart';
 import '../../formulario/modelos/formulario_provider.dart';
-import '../../orthosnap/modelos/orthosnap_modelos.dart';
-import '../../progrip/modelos/progrip_modelos.dart';
 import '../modelos/meshy_models.dart';
 import '../servicios/local_generator_service.dart';
 import '../servicios/meshy_service.dart';
@@ -168,26 +166,6 @@ class GenerationProvider extends ChangeNotifier {
       built: built,
       title: recommendation.title,
       buildLocal: () => _localGenerator.fromFormulario(form),
-    );
-  }
-
-  /// Genera una pieza ProGrip a partir de sus tres capas.
-  Future<void> generateFromProGrip(ProGripConfig config) async {
-    final built = _promptBuilder.fromProGrip(config);
-    await _run(
-      built: built,
-      title: config.title,
-      buildLocal: () => _localGenerator.toolAdapter(config),
-    );
-  }
-
-  /// Genera una órtesis OrthoSnap.
-  Future<void> generateFromOrthoSnap(OrthoSnapRequest request) async {
-    final built = _promptBuilder.fromOrthoSnap(request);
-    await _run(
-      built: built,
-      title: request.title,
-      buildLocal: () => _localGenerator.splint(request),
     );
   }
 

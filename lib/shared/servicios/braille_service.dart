@@ -70,8 +70,8 @@ abstract final class BrailleService {
   static String toBraille(String text) =>
       _converter.convertToBraille(normalize(text));
 
-  /// Etiqueta a partir de un título: "Adaptador ProGrip para sierra" ->
-  /// "adaptador progrip para sierra".
+  /// Etiqueta a partir de un título: "Adaptador para sierra" ->
+  /// "adaptador para sierra".
   ///
   /// Se usa para generar la etiqueta automáticamente cuando el usuario no ha
   /// escrito ninguna.

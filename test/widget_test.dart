@@ -13,7 +13,6 @@ import 'package:braille_text/braille_text.dart';
 import 'package:lumina/features/generacion3d/servicios/local_generator_service.dart';
 import 'package:lumina/features/generacion3d/servicios/prompt_builder_service.dart';
 import 'package:lumina/features/medicion/modelos/measurement_models.dart';
-import 'package:lumina/features/orthosnap/modelos/orthosnap_modelos.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'dart:io';
@@ -183,7 +182,7 @@ void main() {
 
       expect(form.finished, isTrue);
       expect(form.canGenerate, isTrue);
-      expect(form.recommendation!.id, 'progrip_destornillador');
+      expect(form.recommendation!.id, 'grip_destornillador');
       expect(form.promptFragments, isNotEmpty);
     });
 
@@ -358,6 +357,30 @@ void main() {
       expect(view.getUint32(binHeader + 4, Endian.little), 0x004E4942);
     });
 
+    test('el GLB sale Y-arriba: una pieza alta no se tumba', () {
+      // Regresión: las piezas se construyen Z-arriba y glTF es Y-arriba. Sin la
+      // conversión de ejes, el engrosador (alto y estrecho) llegaba al visor
+      // tumbado, y de frente se veía como un círculo.
+      final mesh = const LocalGeneratorService().gripSleeve(
+        measurements: <Measurement>[_measurement('Diámetro del objeto', 4.0)],
+      );
+      final view = ByteData.sublistView(mesh.glb);
+      final jsonLength = view.getUint32(12, Endian.little);
+      final json = jsonDecode(
+        utf8.decode(mesh.glb.sublist(20, 20 + jsonLength)),
+      ) as Map<String, dynamic>;
+      final accessors = json['accessors'] as List<dynamic>;
+      final min = (accessors[0] as Map<String, dynamic>)['min'] as List<dynamic>;
+      final max = (accessors[0] as Map<String, dynamic>)['max'] as List<dynamic>;
+      final widthX = (max[0] as num) - (min[0] as num);
+      final heightY = (max[1] as num) - (min[1] as num);
+      final depthZ = (max[2] as num) - (min[2] as num);
+
+      // La altura es el largo del manguito (70 mm) y supera el diámetro (~31 mm).
+      expect(heightY, greaterThan(widthX));
+      expect(heightY, greaterThan(depthZ));
+    });
+
     test('el engrosador respeta el diámetro medido más la holgura', () {
       final mesh = const LocalGeneratorService().gripSleeve(
         measurements: <Measurement>[_measurement('Diámetro del objeto', 4.0)],
@@ -365,22 +388,6 @@ void main() {
       // 4 cm de objeto + 0,4 mm de holgura a cada lado del agujero.
       expect(mesh.dimensionsMm['diámetro del agujero'], closeTo(40.8, 0.01));
       expect(mesh.kind, LocalPieceKind.gripSleeve);
-    });
-
-    test('la férula usa el perímetro medido y avisa de la ventilación', () {
-      final mesh = const LocalGeneratorService().splint(
-        OrthoSnapRequest(
-          measurements: <Measurement>[
-            _measurement('Perímetro de muñeca', 17.0),
-          ],
-        ),
-      );
-      expect(mesh.dimensionsMm['perímetro'], closeTo(170.0, 0.01));
-      expect(mesh.kind, LocalPieceKind.splint);
-      expect(
-        mesh.notes.any((n) => n.contains('transpirable')),
-        isTrue,
-      );
     });
 
     test('sin medidas avisa de que ha usado valores estándar', () {
@@ -441,7 +448,7 @@ void main() {
       provider.dispose();
     });
 
-    test('la etiqueta Braille se genera sola, sin medidas', () async {
+    test('la etiqueta Braille se crea solo si se pide', () async {
       final provider = GenerationProvider();
       await provider.generateBrailleLabel('medicinas');
 
@@ -451,14 +458,15 @@ void main() {
       provider.dispose();
     });
 
-    test('el prompt incluye la etiqueta Braille de la pieza', () {
+    test('la etiqueta Braille no se graba en la pieza principal', () {
+      // La etiqueta es una pieza aparte: no debe aparecer en el prompt de la
+      // pieza de agarre ni colarse en su geometría.
       final form = FormularioProvider()
         ..selectProfile(NeedProfile.motriz)
         ..answer('m_tool')
         ..answer('m_tool_screwdriver');
       final built = const PromptBuilderService().fromFormulario(form);
-      expect(built.prompt.toLowerCase(), contains('braille'));
-      expect(built.prompt, contains(form.brailleLabel));
+      expect(built.prompt.toLowerCase(), isNot(contains('braille')));
     });
   });
 
@@ -488,10 +496,10 @@ void main() {
       expect(label.endsWith('de'), isFalse);
     });
 
-    test('la etiqueta automática sale del título de la recomendación', () {
+    test('la etiqueta sugerida sale del título de la recomendación', () {
       expect(
-        BrailleService.labelFromTitle('Adaptador ProGrip para sierra'),
-        'adaptador progrip para sierra',
+        BrailleService.labelFromTitle('Adaptador para sierra'),
+        'adaptador para sierra',
       );
     });
   });

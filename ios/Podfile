@@ -50,7 +50,8 @@ post_install do |installer|
     flutter_additional_ios_build_settings(target)
 
     target.build_configurations.each do |config|
-      # Necesario para `permission_handler` y varios plugins de cámara/AR.
+      # El plugin `camera` comprueba el permiso de cámara en tiempo de
+      # ejecución; esta macro deja sus avisos activados en iOS.
       config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [
         '$(inherited)',
         'PERMISSION_CAMERA=1',

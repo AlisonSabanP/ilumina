@@ -18,12 +18,13 @@ Todo lo que sigue se ha ejecutado en este repositorio, no es una estimación:
 | Comprobación | Comando | Resultado |
 | --- | --- | --- |
 | Análisis estático | `flutter analyze` | `No issues found!` |
-| Pruebas | `flutter test` | `32/32 All tests passed!` |
-| APK de depuración | `flutter build apk --debug` | `✓ Built app-debug.apk` |
-| APK de release (R8 + shrink) | `flutter build apk --release` | `✓ Built app-release.apk (102.3MB)` |
+| Pruebas | `flutter test` | `35/35 All tests passed!` |
+| APK de depuración | `flutter build apk --debug` | `✓ Built app-debug.apk (202.8MB)` |
+| APK de release (R8 + shrink) | `flutter build apk --release` | `✓ Built app-release.apk (102.0MB)` |
+| APK de release por ABI | `flutter build apk --release --split-per-abi` | `✓ arm64-v8a 43.7MB · armeabi-v7a 38.0MB · x86_64 48.0MB` |
 
-Entorno usado: Flutter 3.47.8 stable, Dart 3.13.7, AGP 9.1.0, Gradle 9.3.1,
-Kotlin 2.4.0, JDK 17, Android SDK 36, NDK 28.2.13676358.
+Entorno usado: Flutter 3.47.9 stable, Dart 3.13.7, AGP 9.1.0, Gradle 9.3.1,
+Kotlin 2.4.0, JDK 21 (compilando a Java 17), Android SDK 36, NDK 28.2.13676358.
 
 La compilación de iOS **no** se ha podido verificar aquí: requiere macOS y
 Xcode, que no existen en este entorno. Todo el código Dart es multiplataforma
@@ -32,8 +33,9 @@ quedan pendientes de ejecutarse en un Mac.
 
 ## Requisitos
 
-- Flutter 3.44 o superior (probado con 3.47.8) con Dart 3.13.
-- Android: JDK 17, Android SDK 36, NDK 28.2.13676358, `minSdk 24`.
+- Flutter 3.44 o superior (probado con 3.47.9) con Dart 3.13.
+- Android: JDK 17 o superior (AGP 9 lo exige), Android SDK 36,
+  NDK 28.2.13676358, `minSdk 24`.
 - iOS (medida a mano, generación, visor y Braille): macOS con Xcode,
   `platform :ios, '15.0'`.
 
@@ -58,10 +60,10 @@ Hay dos vías, y la de por defecto **no llama a ninguna API**:
 
 1. **Generación en el dispositivo (por defecto).** `LocalGeneratorService`
    construye geometría paramétrica a partir del formulario y de las medidas
-   reales: placas Braille con puntos en relieve, engrosadores de agarre con
-   garfio, adaptadores ProGrip de tres capas y férulas ventiladas. Se exporta a
-   **STL binario** (para imprimir) y a **GLB** (para el visor). Coste cero,
-   funciona sin conexión y el archivo es imprimible de verdad.
+   reales: engrosadores de agarre con garfio y apoyo de palma, y placas Braille
+   con puntos en relieve. Se exporta a **STL binario** (para imprimir) y a
+   **GLB** (para el visor). Coste cero, funciona sin conexión y el archivo es
+   imprimible de verdad.
 2. **Generación con IA (opcional).** Solo si configuras tu clave de Meshy.
 
 ## La clave de Meshy (opcional)
@@ -123,8 +125,8 @@ Ya está escrito, pero **no verificado** (hace falta macOS):
   - `NSPhotoLibraryAddUsageDescription` / `NSPhotoLibraryUsageDescription` —
     para guardar el modelo o una captura.
   - Orientación fijada a retrato, igual que en Android.
-- `ios/Podfile` — `platform :ios, '15.0'` y `PERMISSION_CAMERA=1` para
-  `permission_handler`.
+- `ios/Podfile` — `platform :ios, '15.0'` y `PERMISSION_CAMERA=1` para el
+  plugin `camera`.
 
 ```bash
 cd ios && pod install && cd ..
@@ -145,7 +147,6 @@ aplican al instante y se guardan en el dispositivo.
 
 | Modo | Qué hace |
 | --- | --- |
-| TalkBack / VoiceOver | **No es un interruptor de la app**: se activa en los ajustes del teléfono (el panel explica cómo). Lumina etiqueta todos sus controles con `Semantics` para que funcionen con el lector. |
 | Botones grandes | Área táctil mínima de 64×64 dp y más separación entre controles. |
 | Pictogramas | Un icono grande junto a cada etiqueta, para quien lee con dificultad. |
 | Modo dislexia | Tipografía Andika, más altura de línea (1,7) y más espaciado entre letras (1,2). |
@@ -159,19 +160,44 @@ Los modos de dislexia y alto contraste están sincronizados en dos direcciones
 con el paquete `accessibility_widget`, así que activarlos en cualquiera de los
 dos paneles afecta a toda la app.
 
+Los controles "Invertir colores" y "Guía de lectura" del paquete se han
+retirado del panel: el paquete los guardaba pero no los aplicaba al árbol de
+widgets, así que el interruptor no cambiaba nada. Un control que no cumple lo
+que promete es peor que no tenerlo.
+
+El lector de pantalla del sistema (TalkBack en Android, VoiceOver en iOS) no es
+un modo de la app: se activa en los ajustes del teléfono. Lumina no le dedica un
+interruptor, pero etiqueta todos sus controles con `Semantics` y un orden de
+lectura lógico para que funcionen bien cuando el lector esté activo.
+
 ### El formulario inteligente
 
 1. Elige tu necesidad: **Motriz**, **Visual** o **Cognitiva/Sensibilidad**.
 2. Responde las preguntas. El árbol se ramifica: cada respuesta abre la
    siguiente pregunta y, al final, una recomendación concreta de objeto.
-3. La pieza lleva una **etiqueta en Braille** automática (el título de la
-   recomendación). Puedes cambiarla: escribe el texto, ajusta el tamaño y
-   desliza el dedo por encima para "leerla" con vibración antes de generar.
+3. En la revisión puedes crear, **si quieres**, una **etiqueta en Braille**. No
+   se añade a la pieza: es una pieza aparte, para pegar o colgar del objeto que
+   identifica.
 
-Si eliges el perfil **Visual**, la etiqueta es la pieza: el botón **Crear la
-etiqueta para imprimir** genera directamente la placa con los puntos en relieve
-(1,6 mm de diámetro y 0,8 mm de altura, con la separación estándar de 2,5 mm) y
-la abre en el visor, lista para descargar.
+### La etiqueta en Braille (pieza aparte, opcional)
+
+La etiqueta **no se graba sobre la pieza principal y no se genera sola**: se crea
+únicamente cuando la pides. Hay dos caminos y ambos construyen la misma placa:
+
+- **Elegir el perfil Visual** y la opción "Etiquetas en braille". Entonces
+  "Generar modelo 3D" produce directamente la placa.
+- **Desde la revisión de cualquier otro perfil**, con el botón "Crear etiqueta
+  en Braille", que abre su pantalla propia.
+
+El flujo es: escribes el texto (se propone el título de la recomendación, pero
+es solo una sugerencia editable), ajustas el tamaño de la vista previa y
+deslizas el dedo por encima para "leerla" con vibración. El botón **Crear la
+etiqueta para imprimir** genera la placa con los puntos en relieve (1,6 mm de
+diámetro y 0,8 mm de altura, con la separación estándar de 2,5 mm) y la abre en
+el visor, lista para descargar.
+
+Este es el caso de uso del perfil **Visual**: quien no ve el objeto no necesita
+una pieza grande, necesita la etiqueta. Por eso es su propio objeto imprimible.
 
 ### Tomar medidas
 
@@ -205,40 +231,32 @@ Desde el formulario, "Añadir medida" abre el centro de medición con dos vías:
    directamente en Cura, PrusaSlicer o Bambu Studio. El visor usa una copia
    interna en GLB y funciona sin conexión.
 
-### ProGrip
+### Adaptadores de agarre para herramientas
 
-Prótesis y adaptadores para el trabajo, en tres capas: base de acople, garfio
-funcional (dos dedos, tres dedos, gancho curvo, pinza de presión…) y adaptador
-de herramienta (martillo, destornillador, sierra, cuchillo, tijeras,
-pincel, rastrillo). Cada elección cambia el prompt, y las medidas de la mano se
-incorporan al diseño.
-
-### OrthoSnap
-
-Órtesis clínicas con acceso restringido. El login está **mockeado** (no hay
-backend): cualquier usuario y contraseña no vacíos entran, y se indica en
-pantalla. El formulario clínico (zona de lesión, tipo de férula, diagnóstico,
-lado afectado) más las medidas generan una férula con bandas ventiladas, bordes
-redondeados y estructura abierta, dimensionada con el perímetro medido.
+La rama motriz del formulario cubre siete herramientas (martillo,
+destornillador, sierra, cuchillo, tijeras, pincel y rastrillo). Cada una aporta
+su recomendación y sus frases de diseño al prompt, y las medidas de la mano se
+incorporan al modelo. No hay un módulo aparte: son un resultado más del
+formulario.
 
 ## Documentación técnica
 
-| Paquete / API | Versión | Para qué se usa | Con qué fin |
+| Paquete / API | Versión resuelta | Para qué se usa | Con qué fin |
 | --- | --- | --- | --- |
-| Flutter | 3.47.8 (stable) | Framework | UI multiplataforma, null safety, Material 3 |
+| Flutter | 3.47.9 (stable) | Framework | UI multiplataforma, null safety, Material 3 |
 | Dart | 3.13.7 | Lenguaje | `sdk: ^3.13.0` en `pubspec.yaml` |
-| `provider` | 6.1.2 | Gestión de estado | **Elegido frente a Riverpod** por ser el que usa el material didáctico de Flutter, no necesitar generación de código y bastar para este grafo de estado. Cinco `ChangeNotifier` en la raíz |
+| `provider` | 6.1.5 | Gestión de estado | **Elegido frente a Riverpod** por ser el que usa el material didáctico de Flutter, no necesitar generación de código y bastar para este grafo de estado. Tres `ChangeNotifier` en la raíz |
 | `nested` | 1.0.0 | Tipos | Aporta `SingleChildWidget`, el tipo de la lista de `MultiProvider`; `provider` no lo reexporta |
-| `shared_preferences` | 2.3.0 | Persistencia | Guarda los modos de accesibilidad y el historial de modelos |
-| `flutter_dotenv` | 6.0.0 | Configuración | Lee `MESHY_API_KEY` del `.env`, sin escribir la clave en el código |
-| `http` | 1.2.2 | Red | Cliente REST de Meshy AI |
-| `path_provider` | 2.1.5 | Sistema de ficheros | Carpeta de documentos para las piezas generadas y los `.glb` descargados |
-| `share_plus` | 12.0.0 | Compartir | Envía el `.stl` o el texto en Braille a otras apps |
-| `accessibility_widget` | 0.0.2 | Accesibilidad WCAG | Aporta el `AccessibilityController` y el `AccessibilityWidget` que envuelve la app: filtros de color, saturación, guía de lectura, escala de texto y fuente para dislexia. **Su panel no se usa**: trae los textos en inglés y Lumina dibuja el suyo en español con el mismo controlador |
+| `shared_preferences` | 2.5.6 | Persistencia | Guarda los modos de accesibilidad y el historial de modelos |
+| `flutter_dotenv` | 6.0.1 | Configuración | Lee `MESHY_API_KEY` del `.env`, sin escribir la clave en el código |
+| `http` | 1.6.0 | Red | Cliente REST de Meshy AI |
+| `path_provider` | 2.1.6 | Sistema de ficheros | Carpeta de documentos para las piezas generadas y los `.glb` descargados |
+| `share_plus` | 12.0.2 | Compartir | Envía el `.stl` o el texto en Braille a otras apps |
+| `accessibility_widget` | 0.0.2 | Accesibilidad WCAG | Aporta el `AccessibilityController` y el `AccessibilityWidget` que envuelve la app: saturación, escala de texto, espaciados y fuente para dislexia. **Su panel no se usa**: trae los textos en inglés y Lumina dibuja el suyo en español con el mismo controlador. Sus controles de inversión de color y guía de lectura se descartaron porque no se aplican al árbol de widgets |
 | `braille_text` | 0.0.1 | Accesibilidad visual | `BrailleConverter` traduce texto a Braille Unicode y `BrailleText` lo dibuja con vibración por carácter. Requiere declarar una fuente con glifos Braille (ver mantenimiento) |
-| `camera` | 0.12.1 | Cámara | `CameraController` en `ImageFormatGroup.yuv420` para alimentar a MediaPipe |
+| `camera` | 0.12.2 | Cámara | `CameraController` en `ImageFormatGroup.yuv420` para alimentar a MediaPipe |
 | `hand_landmarker` | 3.1.0 | Visión por computadora | 21 landmarks 3D de la mano vía MediaPipe. **Solo Android** |
-| `power3d` | 2.3.0 | Visor 3D | Visor Babylon.js sobre WebView. `Power3D.fromFile` carga las piezas generadas en el dispositivo, `Power3D.fromNetwork` los modelos de Meshy y `Power3D.fromAsset` cualquier `.glb` empaquetado; `Power3DController` da rotación, zoom, centrado y bloqueo de paneo |
+| `power3d` | 2.3.1 | Visor 3D | Visor Babylon.js sobre WebView. `Power3D.fromFile` carga las piezas generadas en el dispositivo, `Power3D.fromNetwork` los modelos de Meshy y `Power3D.fromAsset` cualquier `.glb` empaquetado; `Power3DController` da rotación, zoom, centrado y bloqueo de paneo |
 | — (código propio) | — | Generación 3D local | `MeshBuilder` (`lib/shared/servicios/stl_builder.dart`) construye mallas paramétricas y las serializa a **STL binario** y **GLB**. Sin dependencias externas y sin coste |
 | Meshy AI REST (opcional) | v2 | Generación 3D con IA | `POST /openapi/v2/text-to-3d` → `task_id` → `GET /openapi/v2/text-to-3d/{task_id}` hasta `SUCCEEDED` → descarga de `model_urls.glb` |
 
@@ -290,8 +308,6 @@ lib/
     medicion/                      Manos y medida manual + modelos
     generacion3d/                  Generador local, cliente de Meshy y pantalla de progreso
     visor3d/                       Visor Power3D y descarga del STL
-    progrip/                       Base + garfio + adaptador de herramienta
-    orthosnap/                     Login mockeado y formulario clínico
     home/                          Pantalla de inicio
   shared/
     servicios/stl_builder.dart     Mallas paramétricas y exportación a STL/GLB
@@ -299,6 +315,9 @@ lib/
     widgets/lumina_widgets.dart    Widgets accesibles reutilizables
 test/widget_test.dart              32 pruebas: accesibilidad, tema, formulario,
                                    Braille, métricas y geometría (STL y GLB)
+test/app_boot_test.dart            3 pruebas de integración: arranque real de
+                                   la app, panel de accesibilidad y recorrido
+                                   completo del formulario hasta la recomendación
 assets/fonts/Andika-*.ttf          Tipografía para dislexia (SIL OFL)
 assets/fonts/BraillePoints.ttf     Glifos Braille (DejaVu Sans, libre)
 assets/images/, assets/models/     Assets declarados (vacíos, con .gitkeep)
@@ -413,13 +432,13 @@ disco con `rootBundle.load` y lo comparte con `share_plus`.
 7. **Error 402 de Meshy** — la cuenta no tiene plan o se agotaron los créditos.
    El mensaje de la app lo explica.
 8. **`adb: failed to install ... app-debug.apk` al hacer `flutter run`** — el
-   APK de debug pesa ~233 MiB porque lleva tres arquitecturas (`arm64-v8a`,
+   APK de debug pesa ~203 MiB porque lleva tres arquitecturas (`arm64-v8a`,
    `armeabi-v7a` y `x86_64`). Causas habituales, en orden de probabilidad:
 
    - **Almacenamiento insuficiente.** `INSTALL_FAILED_INSUFFICIENT_STORAGE`.
-     El instalador necesita copiar el APK y luego extraerlo: con 233 MiB hacen
+     El instalador necesita copiar el APK y luego extraerlo: con 203 MiB hacen
      falta ~500 MiB libres. Libera espacio o compila solo tu arquitectura:
-     `flutter run --target-platform android-arm64` (el APK baja a ~62 MiB).
+     `flutter run --target-platform android-arm64` (el APK baja a ~133 MiB).
    - **Permiso de instalación por USB.** En Huawei/Honor y en Xiaomi/MIUI es
      obligatorio activarlo, o el sistema rechaza cualquier `adb install`.
      Ajustes -> Sistema -> Opciones de desarrollador -> *Instalar aplicaciones
@@ -507,7 +526,7 @@ el APK es idéntico, solo cambia el tiempo de compilación.
 
 Todas se resuelven con `flutter pub get`, incluidos los dos forks locales
 (están en el repositorio). Para compilar Android hacen falta además, fuera de
-Dart: **JDK 17**, **Android SDK 36** y **NDK 28.2.13676358**. Para iOS: macOS,
+Dart: **JDK 17+**, **Android SDK 36** y **NDK 28.2.13676358**. Para iOS: macOS,
 Xcode y CocoaPods.
 
 ## Configuración nativa pendiente
@@ -515,7 +534,6 @@ Xcode y CocoaPods.
 - **iOS**: `pod install` y el build en Xcode, en un Mac. No verificable aquí.
 - **Android**: la firma de release (hay un `TODO` con la configuración de
   debug). Todo lo demás ya está aplicado y probado.
-- **Login de OrthoSnap**: mockeado a propósito, sin backend real.
 - **Clave de Meshy para producción**: el `.env` versionado solo trae el valor
   centinela; hay que pasar la real con `--dart-define` al compilar.
 
@@ -526,7 +544,7 @@ Xcode y CocoaPods.
 | `flutter_inappwebview_android` | Su config de release rompe con Gradle 9 | Fork local ya incluido. Alternativa de más calado: sustituir `power3d` por `model_viewer_plus` o `flutter_cube` |
 | `hand_landmarker` | Solo Android, mantenimiento irregular | `google_mlkit_pose_detection` (multiplataforma) o `mediapipe_flutter`; el adaptador `hand_detector.dart` ya aísla el paquete |
 | `power3d` | Monta un WebView (Babylon.js); en WebViews antiguos no arranca | `model_viewer_plus` o `flutter_cube`; el visor está aislado en `visor_modelo_screen.dart` |
-| `accessibility_widget` | 0.0.2, versión inicial | El panel propio de Lumina cubre TalkBack, botones grandes, pictogramas y dislexia sin él; solo se perderían los filtros de color y la guía de lectura |
+| `accessibility_widget` | 0.0.2, versión inicial | El panel propio de Lumina cubre botones grandes, pictogramas y dislexia sin él; solo se perderían la saturación y el escalado fino de espaciados |
 | `braille_text` | 0.0.1 | `BrailleConverter` es una tabla Unicode: se puede reimplementar en ~50 líneas si el paquete desaparece |
 | Meshy AI | API de pago | El generador local ya cubre el caso de uso sin coste; para IA hay que sustituir `meshy_service.dart` por otro servicio text-to-3D |
 

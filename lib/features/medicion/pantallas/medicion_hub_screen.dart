@@ -12,13 +12,12 @@ import '../../accesibilidad/widgets/accessibility_fab.dart';
 
 /// Central de medición: elige cómo medir y revisa lo medido.
 ///
-/// Reúne las tres vías del pliego en un solo punto de entrada y muestra el
+/// Reúne las dos vías de medición en un solo punto de entrada y muestra el
 /// estado de cada una según la plataforma, para que el usuario no llegue nunca
 /// a una pantalla que no puede funcionar en su dispositivo.
 ///
-/// [target] decide dónde se guardan las medidas: en el formulario inteligente o
-/// en la ficha clínica de OrthoSnap. Se propaga a las tres pantallas de
-/// medición.
+/// [target] decide dónde se guardan las medidas; hoy solo existe el formulario
+/// inteligente. Se propaga a las pantallas de medición.
 class MedicionHubScreen extends StatelessWidget {
   const MedicionHubScreen({
     super.key,
@@ -50,9 +49,8 @@ class MedicionHubScreen extends StatelessWidget {
         children: [
           LuminaPageHeader(
             title: 'Tomar medidas',
-            subtitle: target == MeasurementTarget.clinico
-                ? 'Mide al paciente. Las medidas se guardan en su ficha clínica.'
-                : 'Las medidas hacen que el modelo encaje de verdad. Puedes combinar las tres vías.',
+            subtitle:
+                'Las medidas hacen que el modelo encaje de verdad. Puedes combinar las dos vías.',
             icon: Icons.straighten,
           ),
 
@@ -80,22 +78,14 @@ class MedicionHubScreen extends StatelessWidget {
             onOpen: () => Navigator.of(context).push(
               ManualMeasurementScreen.route(
                 target: target,
-                suggestedLabels: target == MeasurementTarget.clinico
-                    ? const [
-                        'Perímetro de muñeca',
-                        'Ancho de palma',
-                        'Largo del antebrazo',
-                        'Perímetro del tobillo',
-                        'Largo del pie',
-                      ]
-                    : const [
-                        'Largo del objeto',
-                        'Ancho del objeto',
-                        'Alto del objeto',
-                        'Diámetro del mango',
-                        'Perímetro de muñeca',
-                        'Ancho de palma',
-                      ],
+                suggestedLabels: const [
+                  'Largo del objeto',
+                  'Ancho del objeto',
+                  'Alto del objeto',
+                  'Diámetro del mango',
+                  'Perímetro de muñeca',
+                  'Ancho de palma',
+                ],
               ),
             ),
           ),
@@ -104,9 +94,7 @@ class MedicionHubScreen extends StatelessWidget {
 
           // --- Medidas actuales ---
           LuminaSectionCard(
-            title: target == MeasurementTarget.clinico
-                ? 'Medidas del paciente'
-                : 'Medidas guardadas',
+            title: 'Medidas guardadas',
             subtitle: measurements.isEmpty
                 ? 'Todavía no hay ninguna medida.'
                 : '${measurements.length} medida(s) registradas.',

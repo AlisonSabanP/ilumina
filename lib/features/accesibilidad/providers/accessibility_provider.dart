@@ -16,13 +16,12 @@ import '../../../core/app_theme.dart';
 ///  * Anunciar los cambios con `SemanticsService`, de modo que el lector de
 ///    pantalla del sistema confirme la acción.
 ///
-/// Nota sobre TalkBack/VoiceOver: **no es un modo que la app pueda activar**.
-/// TalkBack y VoiceOver son lectores de pantalla del sistema operativo, y solo
-/// se encienden desde los ajustes del móvil. Lumina no ofrece un interruptor
-/// para ellos porque no podría cumplirlo: lo que hace es etiquetar todos sus
-/// widgets con `Semantics` correctos, de modo que funcionen bien cuando el
-/// usuario active el lector por su cuenta. El panel de accesibilidad explica
-/// cómo encenderlo.
+/// Nota sobre los lectores de pantalla: **no son un modo que la app pueda
+/// activar**. TalkBack y VoiceOver son del sistema operativo y solo se encienden
+/// desde los ajustes del móvil, así que Lumina no ofrece un interruptor para
+/// ellos porque no podría cumplirlo: lo que hace es etiquetar todos sus widgets
+/// con `Semantics` correctos, de modo que funcionen bien cuando el usuario
+/// active el lector por su cuenta.
 ///
 /// Se eligió `provider` (ChangeNotifier) frente a `riverpod` porque el estado
 /// de accesibilidad es un único objeto global de ciclo de vida largo, sin

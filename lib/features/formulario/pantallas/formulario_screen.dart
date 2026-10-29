@@ -16,7 +16,8 @@ import 'braille_screen.dart';
 /// Flujo:
 ///   1. Elección de perfil (motriz / visual / cognitiva).
 ///   2. Preguntas ramificadas: cada respuesta decide la siguiente pregunta.
-///   3. Revisión: recomendación, medidas capturadas, material y braille.
+///   3. Revisión: recomendación, medidas capturadas y etiqueta Braille
+///      opcional (pieza aparte).
 ///
 /// Todas las opciones se presentan con [PictogramOptionTile], que respeta los
 /// modos de botones grandes y pictogramas.
@@ -156,7 +157,7 @@ class _QuestionStep extends StatelessWidget {
   }
 }
 
-/// Paso 3: revisión, medidas, material y braille.
+/// Paso 3: revisión, medidas y etiqueta Braille opcional.
 class _ReviewStep extends StatelessWidget {
   const _ReviewStep({super.key});
 
@@ -275,49 +276,26 @@ class _ReviewStep extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.lg),
 
-        // --- Material ---
+        // --- Etiqueta en Braille (pieza aparte, opcional) ---
+        //
+        // La etiqueta nunca se graba sobre la pieza: es una pieza
+        // independiente que se crea solo si el usuario la pide.
         LuminaSectionCard(
-          title: 'Material de impresión',
-          subtitle: 'Afecta a la resistencia y al tacto de la pieza.',
-          leadingIcon: Icons.layers,
-          child: Column(
-            children: [
-              for (var i = 0; i < MaterialQuestion.options.length; i++)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                  child: PictogramOptionTile(
-                    label: MaterialQuestion.options[i],
-                    description:
-                        MaterialQuestion.descriptions[MaterialQuestion.options[i]],
-                    icon: Icons.circle,
-                    pictogram: Icons.layers,
-                    selected: form.material == MaterialQuestion.options[i],
-                    onTap: () =>
-                        form.setMaterial(MaterialQuestion.options[i]),
-                    semanticKey: OrdinalSortKey(i.toDouble()),
-                  ),
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-
-        // --- Braille ---
-        LuminaSectionCard(
-          title: 'Etiqueta en Braille',
+          title: 'Etiqueta en Braille (opcional)',
           subtitle: form.hasCustomBrailleLabel
               ? 'Tu etiqueta: "${form.brailleLabel}"'
-              : 'Se grabará "${form.brailleLabel}" en la pieza. Puedes cambiarlo.',
+              : 'Una pieza aparte para imprimir y pegar. Nunca se añade a la '
+                  'pieza principal.',
           leadingIcon: Icons.dialpad,
           child: AccessibleButton(
             label: form.hasCustomBrailleLabel
                 ? 'Editar etiqueta en Braille'
-                : 'Personalizar etiqueta en Braille',
+                : 'Crear etiqueta en Braille',
             icon: Icons.dialpad,
             pictogram: Icons.dialpad,
             isPrimary: false,
             onPressed: () => Navigator.of(context).push(BrailleScreen.route()),
-            hint: 'Cambia el texto que se graba en relieve en la pieza',
+            hint: 'Escribe el texto, míralo en Braille y créalo como pieza aparte',
           ),
         ),
         const SizedBox(height: AppSpacing.xl),

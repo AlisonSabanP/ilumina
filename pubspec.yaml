@@ -32,7 +32,7 @@ dependencies:
   camera: ^0.12.1
 
   # --- Accesibilidad ---
-  # Panel no invasivo de preferencias WCAG (contraste, tipografía, guía de lectura...).
+  # Panel no invasivo de preferencias WCAG (contraste, tipografía, espaciados...).
   accessibility_widget: ^0.0.2
   # Conversión texto -> Braille Unicode + widget interactivo con feedback háptico.
   braille_text: ^0.0.1

@@ -17,9 +17,13 @@ import '../modelos/formulario_provider.dart';
 
 /// Generador de etiquetas en Braille.
 ///
-/// Es la pantalla clave del perfil visual: quien no ve el objeto necesita una
+/// Es la pantalla del perfil visual: quien no ve el objeto necesita una
 /// etiqueta que pueda leer con el dedo, y aquí se escribe, se ve en Braille y se
-/// convierte en una pieza imprimible de verdad.
+/// convierte en una **pieza imprimible aparte**.
+///
+/// La etiqueta no se graba sobre la pieza principal: se imprime sola, para
+/// pegar o colgar del objeto que identifica. Se crea desde esta pantalla o
+/// eligiendo la rama visual del formulario (ambas construyen la misma placa).
 ///
 /// Usa el paquete `braille_text`:
 ///  * [BrailleText] dibuja el Braille y, al deslizar el dedo por encima, emite
@@ -102,8 +106,8 @@ class _BrailleScreenState extends State<BrailleScreen> {
         text: 'Etiqueta Lumina\n\n'
             'Texto: $_labelText\n'
             'Braille: $_brailleOutput\n\n'
-            'Lumina la graba en relieve en la pieza '
-            '(${LocalGeneratorService.brailleDotHeight} mm de altura de punto).',
+            'Lumina puede imprimirla como pieza aparte, con puntos de '
+            '${LocalGeneratorService.brailleDotHeight} mm de altura.',
         subject: 'Etiqueta en Braille generada con Lumina',
       ),
     );
@@ -111,9 +115,9 @@ class _BrailleScreenState extends State<BrailleScreen> {
 
   /// Crea la etiqueta como pieza imprimible y abre el visor.
   ///
-  /// Este es el paso que faltaba: antes solo se podía ver y copiar el Braille,
-  /// pero el usuario no tenía forma de obtener el objeto. Ahora se construye el
-  /// STL con los puntos en relieve y se muestra igual que cualquier otra pieza.
+  /// Construye el STL con los puntos en relieve y lo muestra igual que
+  /// cualquier otra pieza. La etiqueta nunca se añade a la pieza principal: se
+  /// imprime suelta.
   Future<void> _createPiece() async {
     final generation = context.read<GenerationProvider>();
     final navigator = Navigator.of(context);

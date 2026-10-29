@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -67,6 +68,13 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
   String? _statusMessage;
   String? _localPath;
 
+  /// Evita reaplicar los ajustes de vista más de una vez.
+  ///
+  /// El listener [_onViewerState] se dispara con cada cambio de estado del
+  /// controlador; sin esta bandera, cada reaplicación volvería a notificar y
+  /// entraríamos en el mismo bucle que había con `onModelLoaded`.
+  bool _viewSettingsApplied = false;
+
   /// Ruta local del `.glb` si ya está en el dispositivo.
   ///
   /// Es el caso de las piezas construidas por Lumina: el archivo ya existe
@@ -92,22 +100,42 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
   @override
   void initState() {
     super.initState();
+    _controller.addListener(_onViewerState);
     _configureController();
     _checkExistingDownload();
   }
 
   @override
   void dispose() {
+    _controller.removeListener(_onViewerState);
     _controller.dispose();
     super.dispose();
   }
 
-  /// Aplica los límites de navegación y la vista inicial nada más crear el visor.
-  Future<void> _configureController() async {
-    // `initialize()` es síncrono: solo marca el estado como listo. El WebView
-    // llama a este mismo método en `onLoadStop`, así que aquí únicamente se
-    // fijan los límites de navegación y el ángulo de cámara.
-    _controller.initialize();
+  /// Reaplica los ajustes de vista cuando la escena ya está montada.
+  ///
+  /// `updateZoom`, `updateRotation` y `setLockPosition` escriben en el
+  /// controlador *y* mandan el ajuste al WebView. En `initState` el WebView
+  /// todavía no existe, así que sin esto los límites de zoom y el bloqueo de
+  /// paneo nunca llegaban a la vista. Se aplican una sola vez, cuando el modelo
+  /// termina de cargar.
+  ///
+  /// Nota: no se puede usar `onModelLoaded` del paquete para esto. Ese callback
+  /// se dispara desde su propio listener de estado, y `Power3DState` no define
+  /// `operator ==`, así que cualquier `copyWith` notifica aunque no cambie nada:
+  /// escribir el estado desde el callback provoca un bucle infinito que congela
+  /// la app. La bandera [_viewSettingsApplied] corta ese bucle aquí.
+  void _onViewerState() {
+    if (_viewSettingsApplied) return;
+    if (_controller.value.status != Power3DStatus.loaded) return;
+    // La bandera se pone ANTES de tocar el controlador: cada escritura notifica
+    // a los listeners y volveríamos a entrar en este método.
+    _viewSettingsApplied = true;
+    // En microtask para no escribir el estado durante la notificación en curso.
+    unawaited(Future.microtask(_applyViewSettings));
+  }
+
+  Future<void> _applyViewSettings() async {
     await _controller.updateZoom(enabled: true, min: 0.4, max: 4.0);
     await _controller.updateRotation(
       enabled: true,
@@ -115,15 +143,30 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
       direction: RotationDirection.clockwise,
     );
     await _controller.setLockPosition(_positionLocked);
+  }
+
+  /// Prepara el controlador y fija la cámara inicial.
+  ///
+  /// Se llama en `initState` y desde el botón "Reintentar" del visor.
+  Future<void> _configureController() async {
+    // Un reintento vuelve a cargar el modelo, así que hay que permitir que los
+    // ajustes de vista se reapliquen a la escena nueva.
+    _viewSettingsApplied = false;
+    // `initialize()` es síncrono: solo marca el estado como listo y reenvía la
+    // configuración que ya esté en `value`.
+    _controller.initialize();
+    // La posición de cámara sí conviene fijarla ya: `power3d` la reaplica por su
+    // cuenta al cargar el modelo leyendo `value`.
     await _applyInitialCamera();
     if (mounted) setState(() {});
   }
 
   /// Coloca la cámara en la vista de tres cuartos.
   ///
-  /// Se aplica también cuando el modelo termina de cargar (`onModelLoaded`),
-  /// porque el visor reencuadra la escena al añadir la malla y dejaría la
-  /// cámara otra vez de frente.
+  /// Ojo: `power3d` ya reaplica `cameraAlpha`/`cameraBeta`/`cameraRadius` por su
+  /// cuenta cada vez que carga el modelo (`initialize()` y el mensaje `loaded`
+  /// lo hacen leyendo `value`), así que basta con dejar el valor en el
+  /// controlador. Ver [_onViewerState] para el porqué de no usar `onModelLoaded`.
   Future<void> _applyInitialCamera() async {
     try {
       await _controller.setCameraPosition(
@@ -132,8 +175,8 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
         radius: _cameraRadius,
       );
     } catch (error) {
-      // Si el WebView aún no está listo, `_configureController` volverá a
-      // llamar a este método en `onLoadStop`.
+      // Si el WebView aún no está listo, `initialize()` reaplicará el valor
+      // cuando termine de cargar.
       debugPrint('No se pudo fijar la cámara inicial: $error');
     }
   }
@@ -293,16 +336,16 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
   /// Se prefiere siempre la fuente local: el visor funciona sin conexión y sin
   /// esperas cuando el archivo ya está en el móvil.
   ///
-  /// En ambos casos se engancha `onModelLoaded` para recolocar la cámara: el
-  /// visor reencuadra la escena al añadir la malla y, si no se hiciera, la
-  /// pieza volvería a verse de frente (el "círculo").
+  /// No se pasa `onModelLoaded`: ese callback se dispara desde el listener de
+  /// estado del paquete y colocar la cámara desde ahí provoca un bucle infinito
+  /// (ver [_applyInitialCamera]). El paquete ya reaplica la posición de cámara
+  /// guardada en el controlador cuando la malla termina de cargar.
   Widget _buildViewer() {
     final localPath = _localGlbPath;
     if (localPath != null) {
       return Power3D.fromFile(
         localPath,
         controller: _controller,
-        onModelLoaded: _applyInitialCamera,
         loadingUi: (context, controller) => const LuminaLoadingView(
           message: 'Cargando tu pieza...',
         ),
@@ -318,7 +361,6 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
     return Power3D.fromNetwork(
       _modelUrl,
       controller: _controller,
-      onModelLoaded: _applyInitialCamera,
       loadingUi: (context, controller) => const LuminaLoadingView(
         message: 'Cargando el modelo 3D...',
       ),

@@ -89,12 +89,20 @@ a la pieza. Para una pieza alta y estrecha es el peor ángulo: se ve de canto y
 parece un círculo. `visor_modelo_screen.dart` fija una vista de tres cuartos con
 `setCameraPosition(alpha: -0.75, beta: 1.15, radius: 2.4)`.
 
-Dos detalles que se rompen si se tocan sin cuidado:
+Tres detalles que se rompen si se tocan sin cuidado:
 
-1. El visor reencuadra la escena al añadir la malla, así que la cámara hay que
-   recolocarla también en `onModelLoaded`. Fijarla solo al crear el controlador
-   no basta: la pieza vuelve a verse de frente.
-2. El botón "Centrar" **no** llama a `resetView()` del paquete. Ese método
+1. **No enganches nada a `onModelLoaded`.** Ese callback se dispara dentro del
+   listener de estado del paquete (`_onStateChanged`), y `Power3DState` no
+   define `operator ==`, así que *cualquier* `copyWith` notifica aunque no
+   cambie nada. Escribir el estado del controlador desde el callback (por
+   ejemplo con `setCameraPosition`) notifica, lo que vuelve a llamar al
+   callback: bucle infinito y la app se congela. Costó un cuelgue descubrirlo.
+2. Para reaplicar ajustes cuando la escena ya existe (zoom, bloqueo, rotación),
+   usa un listener propio con bandera de una sola pasada. Ver `_onViewerState`.
+   No basta con `initState`: allí el WebView aún no existe y los ajustes se
+   pierden. El paquete solo reaplica por su cuenta la cámara, los materiales y
+   la selección; el zoom y el bloqueo no.
+3. El botón "Centrar" **no** llama a `resetView()` del paquete. Ese método
    recrea la cámara por defecto, o sea, devuelve justo la vista mala. Llama a
    `_applyInitialCamera()`.
 

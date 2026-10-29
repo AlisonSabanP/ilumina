@@ -1,0 +1,14 @@
+# Fork local de `flutter_inappwebview_android` 1.1.3: el código es el original
+# (Apache/MIT) y solo se moderniza `android/build.gradle` para Gradle 9. Se
+# relajan los lints de código de terceros.
+include: package:flutter_lints/flutter.yaml
+
+linter:
+  rules:
+    use_super_parameters: false
+    prefer_const_constructors: false
+
+analyzer:
+  errors:
+    deprecated_member_use: ignore
+    deprecated_member_use_from_same_package: ignore

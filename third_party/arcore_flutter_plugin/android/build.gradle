@@ -1,0 +1,67 @@
+// Fork local de `arcore_flutter_plugin` 0.1.0 (Apache-2.0) incluido en
+// `third_party/` porque el paquete original de pub.dev ya no compila:
+//
+//  1. Su `build.gradle` usa `jcenter()`, un repositorio retirado, y Gradle 9 lo
+//     rechaza con "Could not find method jcenter()".
+//  2. Declara un `buildscript` propio con AGP 3.5.3 y Kotlin 1.3.50 que choca
+//     con el AGP 9 / Kotlin 2.4 del proyecto.
+//  3. Sus dependencias de Sceneform 1.13 solo existen en el Maven de Google.
+//
+// El código Dart y Kotlin es el original, sin cambios. Solo se moderniza la
+// configuración de compilación. Si algún día `arcore_flutter_plugin` se publica
+// con un `build.gradle` compatible, basta con volver a la dependencia de pub.dev.
+group 'com.difrancescogianmarco.arcore_flutter_plugin'
+version '0.1.0-lumina'
+
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+android {
+    namespace 'com.difrancescogianmarco.arcore_flutter_plugin'
+    compileSdk 36
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+
+    defaultConfig {
+        minSdk 24
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // Sceneform usa construcciones de Java 8.
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    lintOptions {
+        textReport = true
+        abortOnError false
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    // Sceneform 1.17.1 es la última revisión publicada en el Maven de Google y
+    // arrastra ARCore 1.44, que sí está disponible.
+    implementation 'com.google.ar:core:1.44.0'
+    implementation 'com.google.ar.sceneform:core:1.17.1'
+    implementation 'com.google.ar.sceneform:assets:1.17.1'
+    // `sceneform-ux` arrastra `com.android.support:support-fragment:27.1.0`, que
+    // reimplementa clases que androidx.core ya trae y provoca "Duplicate class".
+    // Lumina no usa el fragmento de Sceneform (ArFragment) ni el seguimiento
+    // facial: solo `ArSceneView` y `AnchorNode`, que viven en
+    // `sceneform:core`. Se excluye el árbol de support libraries.
+    implementation('com.google.ar.sceneform.ux:sceneform-ux:1.17.1') {
+        exclude group: 'com.android.support'
+        exclude group: 'android.arch.lifecycle'
+        exclude group: 'android.arch.core'
+    }
+    implementation 'androidx.core:core-ktx:1.13.1'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
+}

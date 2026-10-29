@@ -1,0 +1,99 @@
+name: lumina
+description: "Lumina — impresión 3D accesible para todos (motriz, visual, cognitiva) y para profesionales de la salud y ortopedia."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.0
+  flutter: ">=3.44.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # --- Gestión de estado ---
+  provider: ^6.1.2
+  # `nested` aporta `SingleChildWidget`, el tipo de la lista de `MultiProvider`.
+  # Lo usa `provider` internamente; se declara para poder anotar la lista.
+  nested: ^1.0.0
+
+  # --- Persistencia local ---
+  shared_preferences: ^2.3.0
+
+  # --- Red (Meshy AI REST) y utilidades ---
+  http: ^1.2.2
+  path_provider: ^2.1.5
+  share_plus: ^12.0.0
+  flutter_dotenv: ^6.0.0
+
+  # --- Cámara (usada por la captura de manos) ---
+  camera: ^0.12.1
+
+  # --- Accesibilidad ---
+  # Panel no invasivo de preferencias WCAG (contraste, tipografía, guía de lectura...).
+  accessibility_widget: ^0.0.2
+  # Conversión texto -> Braille Unicode + widget interactivo con feedback háptico.
+  braille_text: ^0.0.1
+
+  # --- Visión por computadora / Medición ---
+  # AR milimétrico (ARKit / ARCore) para medir objetos tocando dos puntos.
+  # `neom_ar` unifica ambas plataformas tras su interfaz `ArService`.
+  neom_ar: ^1.0.0
+  # Implementaciones nativas de AR: Lumina construye la vista de cámara con
+  # estos dos plugins (la parte que `neom_ar` deja al consumidor).
+  arkit_plugin: ^1.5.0
+  # `arcore_flutter_plugin` llega de forma transitiva desde `neom_ar`; el fork
+  # local que hace que compile se declara en `dependency_overrides`, más abajo.
+  arcore_flutter_plugin: ^0.1.0
+  # `neom_ar` usa Sint (GetX-like) para su controlador de medición. Se declara
+  # explícitamente porque Lumina importa `Sint` para registrar el controlador.
+  sint: ^1.6.2
+  # 21 landmarks 3D de la mano vía MediaPipe. SOLO Android.
+  hand_landmarker: ^3.1.0
+
+  # --- Visor 3D (Babylon.js sobre WebView) ---
+  power3d: ^2.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+# `neom_ar` pide `arcore_flutter_plugin: ^0.1.0` de pub.dev, pero esa versión no
+# compila con Gradle 9: su `build.gradle` llama a `jcenter()` (repositorio
+# retirado) y declara un buildscript con AGP 3.5.3 incompatible con el AGP 9 del
+# proyecto. El override apunta al fork local de `third_party/`, que solo cambia
+# la configuración de compilación y actualiza Sceneform 1.13 -> 1.17.1.
+# Es el mecanismo estándar de Pub para sustituciones de dependencias transitivas.
+dependency_overrides:
+  arcore_flutter_plugin:
+    path: third_party/arcore_flutter_plugin
+  # `power3d` -> `flutter_inappwebview` -> `flutter_inappwebview_android` 1.1.3,
+  # cuya configuración de release usa `proguard-android.txt`; Gradle 9 rechaza
+  # ese fichero porque desactiva R8. El fork solo cambia esa línea por
+  # `proguard-android-optimize.txt`. Ver el CHANGELOG del paquete.
+  flutter_inappwebview_android:
+    path: third_party/flutter_inappwebview_android
+
+flutter:
+  uses-material-design: true
+
+  # `.env` se empaqueta como asset porque `flutter_dotenv` lo lee del bundle en
+  # el dispositivo (no del sistema de ficheros). El fichero versionado solo
+  # contiene la clave pública de prueba; la clave real se inyecta con
+  # `--dart-define=MESHY_API_KEY=...`, que tiene prioridad. Ver `lib/core/env.dart`.
+  assets:
+    - assets/images/
+    - assets/models/
+    - assets/fonts/
+    - .env
+
+  fonts:
+    # Andika: tipografía diseñada para lectores con dislexia (SIL Open Font License).
+    - family: Andika
+      fonts:
+        - asset: assets/fonts/Andika-Regular.ttf
+        - asset: assets/fonts/Andika-Bold.ttf
+          weight: 700

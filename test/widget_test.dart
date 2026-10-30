@@ -8,6 +8,7 @@ import 'package:lumina/features/formulario/modelos/formulario_provider.dart';
 import 'package:lumina/features/formulario/pantallas/braille_screen.dart';
 import 'package:lumina/features/generacion3d/providers/generation_provider.dart';
 import 'package:lumina/features/visor3d/pantallas/visor_modelo_screen.dart';
+import 'package:lumina/features/visor3d/servicios/model_download_service.dart';
 import 'package:provider/provider.dart';
 import 'package:braille_text/braille_text.dart';
 import 'package:lumina/features/generacion3d/servicios/local_generator_service.dart';
@@ -402,14 +403,16 @@ void main() {
   });
 
   group('GenerationProvider', () {
-    test('sin clave propia genera en el dispositivo, sin red', () {
+    test('sin clave propia arranca en modo demostración, sin red', () {
       final provider = GenerationProvider();
-      expect(provider.isLocalMode, isTrue);
+      expect(provider.isDemoMode, isTrue);
       expect(provider.isMeshyMode, isFalse);
       expect(provider.hasModel, isFalse);
     });
 
-    test('la generación local termina con una pieza STL utilizable', () async {
+    test('la demostración muestra la pieza de ejemplo empaquetada', () async {
+      // Sin clave de Meshy no se llama a la API: se enseña el cubo incluido en
+      // la app para poder probar el flujo completo.
       final provider = GenerationProvider();
       final form = FormularioProvider()
         ..selectProfile(NeedProfile.motriz)
@@ -420,10 +423,9 @@ void main() {
 
       expect(provider.phase, GenerationPhase.succeeded);
       expect(provider.hasModel, isTrue);
-      expect(provider.model!.isLocal, isTrue);
-      expect(provider.model!.stlPath, isNotNull);
-      expect(provider.model!.stlPath, endsWith('.stl'));
-      expect(provider.model!.pieceSummary, isNotEmpty);
+      expect(provider.model!.isDemo, isTrue);
+      expect(provider.model!.isLocalAsset, isTrue);
+      expect(provider.model!.assetPath, GenerationProvider.demoAssetPath);
       expect(provider.history, hasLength(1));
       provider.dispose();
     });
@@ -437,7 +439,7 @@ void main() {
       expect(form.brailleLabel, isNotEmpty);
 
       final provider = GenerationProvider();
-      await provider.generateFromFormulario(form);
+      await provider.generateBrailleLabel(form.brailleLabel);
 
       expect(provider.phase, GenerationPhase.succeeded);
       expect(provider.model!.isLocal, isTrue);
@@ -467,6 +469,66 @@ void main() {
         ..answer('m_tool_screwdriver');
       final built = const PromptBuilderService().fromFormulario(form);
       expect(built.prompt.toLowerCase(), isNot(contains('braille')));
+    });
+  });
+
+  group('Pieza de demostración (cubo)', () {
+    testWidgets('el visor abre la pieza de ejemplo empaquetada', (tester) async {
+      // Sin clave de Meshy la app muestra el cubo incluido en la app. Este test
+      // comprueba que el visor lo carga con `Power3D.fromAsset` y que no se
+      // queda en el estado de error.
+      final generation = GenerationProvider();
+      final a11y = AccessibilityProvider();
+      addTearDown(generation.dispose);
+
+      final form = FormularioProvider()
+        ..selectProfile(NeedProfile.motriz)
+        ..answer('m_tool')
+        ..answer('m_tool_screwdriver');
+
+      await tester.runAsync(() async {
+        await generation.generateFromFormulario(form);
+      });
+      expect(generation.model!.isDemo, isTrue);
+      expect(generation.model!.assetPath, GenerationProvider.demoAssetPath);
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<GenerationProvider>.value(value: generation),
+            ChangeNotifierProvider<AccessibilityProvider>.value(value: a11y),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.light(accessibility: a11y.themeExtension),
+            home: VisorModeloScreen(model: generation.model!),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byType(VisorModeloScreen), findsOneWidget);
+      // La pieza de ejemplo no se puede "descargar" del dispositivo: el botón
+      // sigue existiendo y exporta el asset.
+      expect(find.text('Descargar STL'), findsOneWidget);
+    });
+
+    test('el asset del cubo se empaqueta y se puede exportar a disco', () async {
+      // `exportAsset` es lo que hace el botón de descarga en modo demo: copia el
+      // `.glb` de la app al almacenamiento del dispositivo.
+      final service = ModelDownloadService();
+      final path = await service.exportAsset(
+        assetPath: GenerationProvider.demoAssetPath,
+        id: 'demo_test',
+        title: 'Pieza de ejemplo',
+      );
+      final file = File(path);
+      expect(file.existsSync(), isTrue);
+      // El cubo real pesa más de un kilobyte: comprueba que no se copió vacío.
+      expect(file.lengthSync(), greaterThan(1000));
+      // Y sigue siendo un contenedor glTF válido.
+      final bytes = file.readAsBytesSync();
+      expect(String.fromCharCodes(bytes.sublist(0, 4)), 'glTF');
     });
   });
 

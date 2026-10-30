@@ -48,14 +48,20 @@ quede sin memoria al compilar MediaPipe junto con el WebView de `power3d`.
   (`lib/features/accesibilidad/pantallas/panel_accesibilidad_screen.dart`). Si
   tocas uno, revisa el otro: el flag `_syncing` existe para evitar bucles.
 
-## Generación 3D: local por defecto, Meshy opcional
+## Generación 3D: demo por defecto, Braille local, Meshy opcional
 
-**La vía por defecto no usa ninguna API.** `LocalGeneratorService`
+**Sin clave de Meshy la app no llama a ninguna API.** Muestra la **pieza de
+ejemplo** empaquetada en `assets/models/demo_pieza.glb` (un cubo rojo) con
+`Power3D.fromAsset`: así el visor, la descarga y el compartir se prueban de
+principio a fin sin gastar créditos. `GenerationProvider.demoAssetPath` es la
+ruta y `_runDemo` la construye.
+
+**La única pieza que se genera en el dispositivo es la etiqueta Braille.**
+`LocalGeneratorService`
 (`lib/features/generacion3d/servicios/local_generator_service.dart`) construye
-geometría paramétrica real con `MeshBuilder`
+la placa con los puntos en relieve usando `MeshBuilder`
 (`lib/shared/servicios/stl_builder.dart`) y la exporta a **STL binario** (para
-el laminador) y a **GLB** (para el visor). Cuesta cero, funciona sin conexión y
-produce un archivo imprimible de verdad.
+el laminador) y a **GLB** (para el visor). Cuesta cero y funciona sin conexión.
 
 Meshy solo se usa si hay una clave propia configurada (`Env.isMeshyTestMode` es
 `false`). Esto no es una preferencia estética: **Meshy no tiene modo de prueba

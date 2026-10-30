@@ -113,11 +113,13 @@ class HomeScreen extends StatelessWidget {
                     leading: const Icon(Icons.threed_rotation),
                     title: Text(model.title),
                     subtitle: Text(
-                      model.isLocal
-                          ? 'Creado en el dispositivo'
-                          : model.isDownloaded
-                              ? 'Guardado en el dispositivo'
-                              : 'En la nube',
+                      model.isDemo
+                          ? 'Pieza de ejemplo'
+                          : model.isLocal
+                              ? 'Creado en el dispositivo'
+                              : model.isDownloaded
+                                  ? 'Guardado en el dispositivo'
+                                  : 'En la nube',
                     ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => Navigator.of(context).push(
@@ -200,11 +202,13 @@ class HistoryScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          model.isLocal
-                              ? 'Creado en el dispositivo'
-                              : model.isDownloaded
-                                  ? 'Guardado en el dispositivo'
-                                  : 'Solo en la nube (se borra a los 3 días)',
+                          model.isDemo
+                              ? 'Pieza de ejemplo incluida en la app'
+                              : model.isLocal
+                                  ? 'Creado en el dispositivo'
+                                  : model.isDownloaded
+                                      ? 'Guardado en el dispositivo'
+                                      : 'Solo en la nube (se borra a los 3 días)',
                         ),
                         if (model.createdAt != null)
                           Text(

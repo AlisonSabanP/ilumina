@@ -5,11 +5,12 @@ motriz, visual o cognitiva (incluida la sensibilidad propia del autismo) y a
 profesionales de la salud y la ortopedia a diseñar objetos impresos en 3D que
 encajen de verdad: en su mano, en su casa o en su consulta.
 
-La app mide con la cámara (21 puntos de la mano) o a mano, y **construye el
-modelo 3D en el propio dispositivo**: geometría paramétrica real exportada a STL
-y GLB, sin coste y sin conexión. Opcionalmente, si el usuario aporta su propia
-clave, también puede generar con IA a través de Meshy AI. El modelo se puede ver
-en 3D, descargar y compartir.
+La app mide con la cámara (21 puntos de la mano) o a mano. Sin clave de Meshy
+muestra una **pieza de ejemplo** incluida en la app, para que el flujo completo
+(visor 3D, descarga y compartir) se pueda probar sin coste. Con la clave propia
+del usuario, la pieza la genera la IA de Meshy AI. Las **etiquetas Braille** se
+construyen siempre en el propio dispositivo, con geometría real exportada a STL.
+El modelo se puede ver en 3D, descargar y compartir.
 
 ## Estado de verificación
 
@@ -46,9 +47,10 @@ flutter pub get
 flutter run
 ```
 
-No hace falta configurar nada: **la generación funciona sin clave y sin red**.
-Lumina construye la pieza en el propio dispositivo y la entrega en STL, listo
-para el laminador. No gasta créditos ni necesita conexión.
+No hace falta configurar nada: **la app arranca en modo demostración**. Sin
+clave de Meshy se muestra una pieza de ejemplo empaquetada en la app y la
+etiqueta Braille se construye en el propio dispositivo. No gasta créditos ni
+necesita conexión.
 
 El `.env` que incluye el repositorio solo contiene el valor centinela de Meshy
 (ver más abajo); se versiona a propósito porque `flutter_dotenv` lo lee del
@@ -56,15 +58,15 @@ bundle y la compilación falla si el fichero no existe.
 
 ## Generación 3D: gratis por defecto, Meshy opcional
 
-Hay dos vías, y la de por defecto **no llama a ninguna API**:
+Hay tres vías:
 
-1. **Generación en el dispositivo (por defecto).** `LocalGeneratorService`
-   construye geometría paramétrica a partir del formulario y de las medidas
-   reales: engrosadores de agarre con garfio y apoyo de palma, y placas Braille
-   con puntos en relieve. Se exporta a **STL binario** (para imprimir) y a
-   **GLB** (para el visor). Coste cero, funciona sin conexión y el archivo es
-   imprimible de verdad.
-2. **Generación con IA (opcional).** Solo si configuras tu clave de Meshy.
+1. **Modo demostración (por defecto, sin clave).** Se muestra el cubo de
+   ejemplo incluido en `assets/models/demo_pieza.glb` con `Power3D.fromAsset`.
+   Sirve para probar el visor, la descarga y el compartir sin gastar créditos.
+2. **Etiqueta Braille (local, sin red).** `LocalGeneratorService` construye la
+   placa con los puntos en relieve y la exporta a **STL binario** (para
+   imprimir) y **GLB** (para el visor). Coste cero y funciona sin conexión.
+3. **Generación con IA (opcional).** Solo si configuras tu clave de Meshy.
 
 ## La clave de Meshy (opcional)
 
@@ -266,9 +268,9 @@ formulario.
 
 - **No existe modo de prueba.** El valor
   `msy_dummy_api_key_for_test_mode_12345678` que trae el `.env` versionado no
-  es válido: sirve solo de centinela. Mientras esté ahí, Lumina genera en el
-  dispositivo y no gasta nada.
-- **La vía por defecto es gratuita**: la geometría paramétrica no llama a
+  es válido: sirve solo de centinela. Mientras esté ahí, Lumina muestra la
+  pieza de ejemplo y no gasta nada.
+- **El modo demostración y la etiqueta Braille son gratuitos**: no llaman a
   ningún servicio, así que un centro escolar o un usuario particular pueden usar
   Lumina entera sin coste recurrente.
 - Con una clave real, cada tarea `preview` de text-to-3D consume créditos del

@@ -29,7 +29,7 @@ suposiciones.
 | Diseñar en 3D exige formación técnica | Un formulario de preguntas cortas que recomienda el objeto |
 | Cada mano y cada cuerpo son distintos | Medición con cámara (21 puntos de la mano) o con regla |
 | Muchas apps no son usables por quien las necesita | Cinco modos de accesibilidad conmutables en caliente |
-| El software de diseño 3D es caro | Generación en el propio dispositivo, gratis y sin conexión |
+| El software de diseño 3D es caro | Modo demostración incluido y etiqueta Braille construida en el propio dispositivo, gratis y sin conexión |
 
 ---
 
@@ -38,8 +38,9 @@ suposiciones.
 1. **La app se adapta a la persona.** Botones grandes, pictogramas, fuente para
    dislexia, alto contraste y reducir movimiento. Se activan en cualquier
    pantalla y se aplican al instante.
-2. **Genera el modelo sin coste.** La pieza se construye en el propio móvil con
-   geometría paramétrica real y sale en STL, el formato que abren todos los
+2. **Muestra el modelo sin coste.** Sin clave de Meshy se enseña una pieza de
+   ejemplo incluida en la app, y la etiqueta Braille se construye en el propio
+   móvil con geometría real y sale en STL, el formato que abren todos los
    laminadores. No necesita internet ni cuenta de pago.
 3. **Mide de verdad.** Con la cámara detecta los 21 puntos de la mano y calcula
    el ancho de palma, la envergadura y la apertura de agarre.

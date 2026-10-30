@@ -16,9 +16,9 @@ import '../providers/generation_provider.dart';
 /// (`PENDING` -> `IN_PROGRESS` -> `SUCCEEDED`) con su porcentaje de progreso, y
 /// ofrece reintentar ante cualquier error.
 ///
-/// Sin una clave propia de Meshy, la pieza se construye en el propio
-/// dispositivo (`LocalGeneratorService`): no gasta créditos, funciona sin
-/// conexión y el resultado es un STL imprimible de verdad.
+/// Sin una clave propia de Meshy, se muestra la **pieza de demostración**
+/// incluida en la app: así el flujo completo (visor, descarga y compartir) se
+/// puede probar de principio a fin sin gastar créditos.
 class GeneracionScreen extends StatefulWidget {
   const GeneracionScreen({super.key});
 
@@ -85,13 +85,13 @@ class _GeneracionScreenState extends State<GeneracionScreen> {
           ),
 
           LuminaInfoBanner(
-            message: generation.isLocalMode
-                ? 'Lumina construye la pieza en el propio dispositivo a partir de '
-                    'tus medidas: es gratis, funciona sin conexión y el archivo '
-                    'STL sale listo para imprimir.'
+            message: generation.isDemoMode
+                ? 'Modo de demostración: no hay clave de Meshy configurada, así '
+                    'que se muestra una pieza de ejemplo para probar el visor, '
+                    'la descarga y el compartir sin gastar créditos.'
                 : 'Se está usando tu clave de Meshy: la pieza la genera el '
                     'servicio en la nube y puede tardar unos minutos.',
-            icon: generation.isLocalMode ? Icons.offline_bolt : Icons.cloud,
+            icon: generation.isDemoMode ? Icons.science_outlined : Icons.cloud,
           ),
 
           const SizedBox(height: AppSpacing.lg),
@@ -196,9 +196,9 @@ class _GeneracionScreenState extends State<GeneracionScreen> {
             const SizedBox(height: AppSpacing.lg),
             LuminaSectionCard(
               title: 'Modelo listo',
-              subtitle: generation.model?.isLocal == true
-                  ? 'Pieza construida en el dispositivo, lista para ver, descargar '
-                      'y compartir.'
+              subtitle: generation.model?.isDemo == true
+                  ? 'Pieza de ejemplo de la app, lista para ver, descargar y '
+                      'compartir.'
                   : 'Meshy conserva los archivos tres días. Descárgalo o compártelo para no perderlo.',
               leadingIcon: Icons.check_circle,
               child: Column(
@@ -323,8 +323,8 @@ class _StatusCard extends StatelessWidget {
     final statusText = switch (generation.phase) {
       GenerationPhase.idle => 'Sin empezar',
       GenerationPhase.preparing => 'Preparando tu diseño...',
-      GenerationPhase.creating => generation.isLocalMode
-          ? 'Construyendo la pieza...'
+      GenerationPhase.creating => generation.isDemoMode
+          ? 'Preparando la pieza de ejemplo...'
           : 'Enviando el diseño...',
       GenerationPhase.polling => generation.task == null
           ? 'Consultando el estado...'
@@ -393,11 +393,10 @@ class _StatusCard extends StatelessWidget {
                   style: theme.textTheme.bodySmall,
                 ),
               ],
-              if (generation.isLocalMode) ...[
+              if (generation.isDemoMode) ...[
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  'La pieza se construye en el dispositivo: no se envía nada a '
-                  'ningún servicio.',
+                  'Modo de demostración: no se envía nada a ningún servicio.',
                   style: theme.textTheme.bodySmall,
                 ),
               ],

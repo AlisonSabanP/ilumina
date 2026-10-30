@@ -75,6 +75,9 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
   /// entraríamos en el mismo bucle que había con `onModelLoaded`.
   bool _viewSettingsApplied = false;
 
+  /// `true` si el modelo es la pieza de demostración incluida en la app.
+  bool get _isDemo => widget.model.isLocalAsset;
+
   /// Ruta local del `.glb` si ya está en el dispositivo.
   ///
   /// Es el caso de las piezas construidas por Lumina: el archivo ya existe
@@ -182,6 +185,8 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
   }
 
   Future<void> _checkExistingDownload() async {
+    // La pieza de demostración vive en los assets: no hay nada que buscar.
+    if (_isDemo) return;
     // Las piezas locales ya están en disco: no hay nada que buscar.
     if (widget.model.isLocal) {
       if (mounted && widget.model.stlPath != null) {
@@ -244,7 +249,7 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
       _statusMessage = 'Preparando el archivo STL...';
     });
     try {
-      final path = await _ensureStl();
+      final path = await _ensureDownloadable();
       if (!mounted) return;
       setState(() {
         _localPath = path;
@@ -273,7 +278,7 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
       _statusMessage = 'Preparando el archivo para compartir...';
     });
     try {
-      final path = await _ensureStl();
+      final path = await _ensureDownloadable();
       if (!mounted) return;
       setState(() => _localPath = path);
       context.read<GenerationProvider>().markDownloaded(
@@ -281,7 +286,11 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
             widget.model.localPath ?? path,
             stlPath: path,
           );
-      await _downloader.shareStlFile(path, title: widget.model.title);
+      if (_isDemo) {
+        await _downloader.shareFile(path, title: widget.model.title);
+      } else {
+        await _downloader.shareStlFile(path, title: widget.model.title);
+      }
       if (!mounted) return;
       setState(() => _statusMessage = 'Archivo listo para compartir.');
     } catch (error) {
@@ -292,6 +301,22 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// Devuelve la ruta del archivo para descargar o compartir.
+  ///
+  /// Tres casos: la pieza de demostración se copia desde el asset, la local ya
+  /// está escrita en disco y la de Meshy se descarga de su URL.
+  Future<String> _ensureDownloadable() async {
+    // Pieza de demostración: se copia desde los assets de la app.
+    if (_isDemo) {
+      return _downloader.exportAsset(
+        assetPath: widget.model.assetPath!,
+        id: widget.model.id,
+        title: widget.model.title,
+      );
+    }
+    return _ensureStl();
   }
 
   /// Devuelve la ruta del STL, obteniéndolo por la vía que corresponda.
@@ -329,7 +354,8 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
 
   /// Construye el visor con la fuente que corresponda.
   ///
-  /// Dos caminos:
+  /// Tres caminos, en este orden de preferencia:
+  ///  * `fromAsset`:   la pieza de demostración incluida en la app.
   ///  * `fromFile`:    una pieza ya escrita en el disco del dispositivo.
   ///  * `fromNetwork`: un modelo de Meshy que aún hay que descargar.
   ///
@@ -341,6 +367,23 @@ class _VisorModeloScreenState extends State<VisorModeloScreen> {
   /// (ver [_applyInitialCamera]). El paquete ya reaplica la posición de cámara
   /// guardada en el controlador cuando la malla termina de cargar.
   Widget _buildViewer() {
+    // Pieza de demostración: vive dentro de la app, no hay nada que descargar.
+    if (_isDemo) {
+      return Power3D.fromAsset(
+        widget.model.assetPath!,
+        controller: _controller,
+        loadingUi: (context, controller) => const LuminaLoadingView(
+          message: 'Cargando la pieza de ejemplo...',
+        ),
+        errorWidget: LuminaErrorView(
+          title: 'No se pudo mostrar la pieza de ejemplo',
+          message: 'La pieza incluida en la app no se pudo cargar.',
+          onRetry: _configureController,
+          retryLabel: 'Reintentar',
+        ),
+      );
+    }
+
     final localPath = _localGlbPath;
     if (localPath != null) {
       return Power3D.fromFile(

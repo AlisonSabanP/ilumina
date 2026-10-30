@@ -217,10 +217,12 @@ class GeneratedModel {
     this.stlUrl,
     this.localPath,
     this.stlPath,
+    this.assetPath,
     this.thumbnailUrl,
     this.taskId,
     this.createdAt,
     this.isLocal = false,
+    this.isDemo = false,
     this.pieceSummary,
     this.pieceNotes = const <String>[],
     this.dimensionsMm = const <String, double>{},
@@ -243,12 +245,29 @@ class GeneratedModel {
   /// lo que abren Cura, PrusaSlicer o Bambu Studio sin conversiones.
   final String? stlPath;
 
+  /// Ruta del `.glb` **empaquetado en la app** que se usará como pieza.
+  ///
+  /// Es el caso de la pieza de demostración: no se genera nada, se muestra el
+  /// archivo incluido en `assets/models/`. El visor lo carga con
+  /// `Power3D.fromAsset` y al descargar se copia tal cual.
+  final String? assetPath;
+
   final String? thumbnailUrl;
   final String? taskId;
   final DateTime? createdAt;
 
   /// `true` si la pieza la ha construido Lumina en el dispositivo, sin red.
   final bool isLocal;
+
+  /// `true` si la pieza es la de demostración empaquetada en la app.
+  ///
+  /// Se usa cuando no hay clave de Meshy: en lugar de inventar geometría, se
+  /// enseña una pieza de ejemplo real para que el flujo completo (visor,
+  /// descarga, compartir) se pueda probar de principio a fin.
+  final bool isDemo;
+
+  /// `true` si el modelo vive como asset dentro de la app.
+  bool get isLocalAsset => assetPath != null;
 
   /// Descripción legible de la pieza generada localmente.
   final String? pieceSummary;
@@ -274,10 +293,12 @@ class GeneratedModel {
         stlUrl: stlUrl,
         localPath: localPath ?? this.localPath,
         stlPath: stlPath ?? this.stlPath,
+        assetPath: assetPath,
         thumbnailUrl: thumbnailUrl,
         taskId: taskId,
         createdAt: createdAt,
         isLocal: isLocal,
+        isDemo: isDemo,
         pieceSummary: pieceSummary,
         pieceNotes: pieceNotes,
         dimensionsMm: dimensionsMm,
@@ -291,10 +312,12 @@ class GeneratedModel {
         'stlUrl': stlUrl,
         'localPath': localPath,
         'stlPath': stlPath,
+        'assetPath': assetPath,
         'thumbnailUrl': thumbnailUrl,
         'taskId': taskId,
         'createdAt': createdAt?.toIso8601String(),
         'isLocal': isLocal,
+        'isDemo': isDemo,
         'pieceSummary': pieceSummary,
         'pieceNotes': pieceNotes,
         'dimensionsMm': dimensionsMm,
@@ -308,10 +331,12 @@ class GeneratedModel {
         stlUrl: json['stlUrl'] as String?,
         localPath: json['localPath'] as String?,
         stlPath: json['stlPath'] as String?,
+        assetPath: json['assetPath'] as String?,
         thumbnailUrl: json['thumbnailUrl'] as String?,
         taskId: json['taskId'] as String?,
         createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
         isLocal: json['isLocal'] as bool? ?? false,
+        isDemo: json['isDemo'] as bool? ?? false,
         pieceSummary: json['pieceSummary'] as String?,
         pieceNotes: (json['pieceNotes'] as List?)?.whereType<String>().toList() ??
             const <String>[],

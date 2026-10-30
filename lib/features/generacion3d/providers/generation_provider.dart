@@ -57,6 +57,13 @@ class GenerationProvider extends ChangeNotifier {
   /// Carpeta donde se guardan las piezas construidas en el dispositivo.
   static const String _localFolderName = 'lumina_piezas';
 
+  /// Pieza de ejemplo empaquetada en la app.
+  ///
+  /// Es el cubo que se muestra cuando no hay clave de Meshy: en lugar de
+  /// inventar geometría, se enseña una pieza real para que el flujo completo
+  /// (visor, descarga y compartir) se pueda probar de principio a fin.
+  static const String demoAssetPath = 'assets/models/demo_pieza.glb';
+
   final MeshyService _service;
   final PromptBuilderService _promptBuilder;
   final LocalGeneratorService _localGenerator;
@@ -69,10 +76,6 @@ class GenerationProvider extends ChangeNotifier {
   GeneratedModel? _model;
   String _title = '';
   bool _cancelRequested = false;
-
-  /// Última receta de construcción local, para poder reintentar sin volver a
-  /// recorrer el formulario ni la configuración del módulo.
-  GeneratedMesh Function()? _lastLocalBuilder;
 
   final List<GeneratedModel> _history = <GeneratedModel>[];
 
@@ -101,12 +104,13 @@ class GenerationProvider extends ChangeNotifier {
   /// `true` si no hay una clave propia de Meshy configurada.
   bool get isTestMode => Env.isMeshyTestMode;
 
-  /// `true` si la generación se hace en el dispositivo, sin red ni coste.
+  /// `true` si no hay una clave propia de Meshy configurada.
   ///
-  /// Es el modo por defecto: Lumina construye la pieza con geometría
-  /// paramétrica y la exporta a STL. No depende de Meshy, así que funciona sin
-  /// conexión y sin gastar créditos.
-  bool get isLocalMode => Env.isMeshyTestMode;
+  /// En ese caso Lumina no llama a la API (respondería 401) y muestra la
+  /// **pieza de demostración** incluida en la app: un cubo de ejemplo. Así el
+  /// flujo completo —visor, descarga y compartir— se puede probar de principio
+  /// a fin sin gastar créditos.
+  bool get isDemoMode => Env.isMeshyTestMode;
 
   /// `true` si la generación se delega en la API de Meshy.
   ///
@@ -114,6 +118,9 @@ class GenerationProvider extends ChangeNotifier {
   /// API de Meshy es de pago: sin clave propia responde 401 y no hay modo de
   /// prueba gratuito.
   bool get isMeshyMode => !Env.isMeshyTestMode;
+
+  /// `true` si el último modelo es la pieza de demostración.
+  bool get isDemoPiece => _model?.isDemo ?? false;
 
   /// `true` si el último modelo es una pieza construida en el dispositivo.
   bool get isLocalPiece => _model?.isLocal ?? false;
@@ -138,11 +145,12 @@ class GenerationProvider extends ChangeNotifier {
 
   /// `true` cuando hay una pieza lista para visualizar.
   ///
-  /// Sirve tanto la vía local (el `.glb` está en el disco) como la de Meshy
-  /// (hay URL remota que descargar).
+  /// Sirve tanto la vía de demostración (el `.glb` está empaquetado como asset)
+  /// como la de Meshy (hay URL remota que descargar).
   bool get hasModel {
     final model = _model;
     if (model == null) return false;
+    if (model.isLocalAsset) return true;
     if (model.localPath != null && model.localPath!.isNotEmpty) return true;
     return model.glbUrl.isNotEmpty;
   }
@@ -162,11 +170,7 @@ class GenerationProvider extends ChangeNotifier {
       return;
     }
     final built = _promptBuilder.fromFormulario(form);
-    await _run(
-      built: built,
-      title: recommendation.title,
-      buildLocal: () => _localGenerator.fromFormulario(form),
-    );
+    await _run(built: built, title: recommendation.title);
   }
 
   /// Construye **solo** la etiqueta Braille como pieza imprimible.
@@ -174,9 +178,13 @@ class GenerationProvider extends ChangeNotifier {
   /// Es el caso de uso del perfil visual: quien no ve el objeto no necesita
   /// una pieza grande con relieve encima, necesita la etiqueta. Se ofrece como
   /// acción independiente para que se pueda imprimir sola.
+  ///
+  /// Es la única pieza que Lumina sigue construyendo en el propio dispositivo:
+  /// la geometría de los puntos Braille es determinista y no depende de ningún
+  /// servicio externo.
   Future<void> generateBrailleLabel(String text, {String? title}) async {
     final label = text.trim().isEmpty ? 'lumina' : text.trim();
-    await _run(
+    await _runLocal(
       built: PromptBuildResult(
         prompt: 'Braille label reading "$label" with raised dots',
         seed: 'Braille label',
@@ -184,8 +192,7 @@ class GenerationProvider extends ChangeNotifier {
         originalLength: 0,
       ),
       title: title ?? 'Etiqueta Braille',
-      buildLocal: () => _localGenerator.braillePlate(label),
-      forceLocal: true,
+      mesh: _localGenerator.braillePlate(label),
     );
   }
 
@@ -193,9 +200,8 @@ class GenerationProvider extends ChangeNotifier {
   /// Meshy no reanuda tareas `FAILED`, hay que crear una nueva.
   Future<void> retry() async {
     final built = _prompt;
-    final builder = _lastLocalBuilder;
-    if (built == null || builder == null) return;
-    await _run(built: built, title: _title, buildLocal: builder);
+    if (built == null) return;
+    await _run(built: built, title: _title);
   }
 
   /// Pide detener el sondeo. La tarea sigue viva en Meshy.
@@ -213,7 +219,6 @@ class GenerationProvider extends ChangeNotifier {
     _error = null;
     _model = null;
     _title = '';
-    _lastLocalBuilder = null;
     _cancelRequested = false;
     notifyListeners();
   }
@@ -285,60 +290,126 @@ class GenerationProvider extends ChangeNotifier {
 
   // --- Núcleo del flujo ------------------------------------------------------
 
-  /// Ejecuta el ciclo completo, por la vía gratuita o por la de Meshy.
+  /// Ejecuta el ciclo completo, por la vía de demostración o por la de Meshy.
   ///
-  /// La vía gratuita es la de por defecto: construye la pieza en el propio
-  /// dispositivo con [LocalGeneratorService] y no hace ninguna llamada de red.
-  /// Meshy solo se usa cuando hay una clave propia configurada, porque su API
-  /// es de pago y responde 401 a cualquier otra clave.
+  /// La vía de demostración es la de por defecto: en lugar de llamar a la API
+  /// (que sin clave propia responde 401), muestra la pieza de ejemplo incluida
+  /// en la app. Meshy solo se usa cuando hay una clave propia configurada,
+  /// porque su API es de pago.
   Future<void> _run({
     required PromptBuildResult built,
     required String title,
-    required GeneratedMesh Function() buildLocal,
-    bool forceLocal = false,
   }) async {
     _prompt = built;
     _title = title;
     _error = null;
     _model = null;
     _task = null;
-    _lastLocalBuilder = buildLocal;
     _cancelRequested = false;
 
-    if (forceLocal || isLocalMode) {
-      await _runLocal(built: built, title: title, buildLocal: buildLocal);
+    if (isDemoMode) {
+      await _runDemo(built: built, title: title);
       return;
     }
 
     await _runMeshy(built: built, title: title);
   }
 
-  // --- Vía gratuita: generación en el dispositivo ----------------------------
+  // --- Vía de demostración: la pieza de ejemplo de la app --------------------
 
-  /// Construye la pieza localmente, la guarda y publica el modelo.
+  /// Simula el flujo de generación con la pieza empaquetada en la app.
   ///
-  /// Se mantienen las mismas fases que la generación remota (`creating` ->
-  /// `polling` -> `succeeded`) para que la interfaz no tenga dos caminos
-  /// distintos, aunque aquí el trabajo real dure milisegundos.
+  /// Mantiene las mismas fases que la generación real (`creating` -> `polling`
+  /// -> `succeeded`) para que la interfaz no cambie, pero no hace ninguna
+  /// llamada de red ni consume créditos: el modelo que se muestra es el cubo
+  /// de ejemplo incluido en `assets/models/`.
+  Future<void> _runDemo({
+    required PromptBuildResult built,
+    required String title,
+  }) async {
+    _phase = GenerationPhase.creating;
+    notifyListeners();
+
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    if (_cancelRequested) {
+      _cancelDemo();
+      return;
+    }
+
+    _phase = GenerationPhase.polling;
+    _task = MeshyTask(
+      id: 'demo',
+      status: MeshyTaskStatus.inProgress,
+      progress: 0,
+    );
+    notifyListeners();
+
+    // Progreso simulado, para que se vea que el flujo avanza.
+    for (final step in const <int>[25, 50, 75, 100]) {
+      await Future<void>.delayed(const Duration(milliseconds: 450));
+      if (_cancelRequested) {
+        _cancelDemo();
+        return;
+      }
+      _task = MeshyTask(
+        id: 'demo',
+        status: step == 100
+            ? MeshyTaskStatus.succeeded
+            : MeshyTaskStatus.inProgress,
+        progress: step,
+      );
+      notifyListeners();
+    }
+
+    final model = GeneratedModel(
+      id: 'demo_${DateTime.now().microsecondsSinceEpoch}',
+      title: title,
+      prompt: built.prompt,
+      glbUrl: '',
+      assetPath: demoAssetPath,
+      taskId: 'demo',
+      createdAt: DateTime.now(),
+      isDemo: true,
+    );
+
+    _model = model;
+    _phase = GenerationPhase.succeeded;
+    _addToHistory(model);
+    notifyListeners();
+  }
+
+  void _cancelDemo() {
+    _fail(
+      const MeshyException(
+        message: 'Demostración detenida.',
+        kind: MeshyErrorKind.timeout,
+      ),
+    );
+  }
+
+  // --- Vía local: solo la etiqueta Braille -----------------------------------
+
+  /// Escribe en disco una pieza construida en el dispositivo y la publica.
+  ///
+  /// Se usa únicamente para la etiqueta Braille: es la única pieza cuya
+  /// geometría Lumina puede calcular sola con garantías. El resto de piezas
+  /// pasan por la pieza de demostración o por Meshy.
   Future<void> _runLocal({
     required PromptBuildResult built,
     required String title,
-    required GeneratedMesh Function() buildLocal,
+    required GeneratedMesh mesh,
   }) async {
     try {
       _phase = GenerationPhase.creating;
       notifyListeners();
 
-      // Se cede el hilo antes de calcular: en un móvil modesto, construir una
-      // malla con miles de triángulos puede tardar lo suficiente como para que
-      // se note un salto si no se deja pintar la fase de carga.
+      // Se cede el hilo antes de escribir: en un móvil modesto, serializar la
+      // malla y tocar el disco puede notarse si no se deja pintar la fase.
       await Future<void>.delayed(const Duration(milliseconds: 80));
       if (_cancelRequested) {
         _cancelLocal();
         return;
       }
-
-      final mesh = buildLocal();
 
       _phase = GenerationPhase.polling;
       _task = MeshyTask(
